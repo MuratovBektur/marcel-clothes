@@ -1,0 +1,17 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Создаем папку заранее и меняем владельца на стандартного пользователя 'node'
+RUN chown -R node:node /app
+
+RUN mkdir -p /app/uploads && chown -R node:node /app/uploads
+
+# Переключаемся на пользователя node (его UID обычно 1000)
+USER node
+
+COPY --chown=node:node package*.json ./
+
+RUN npm install
+
+COPY --chown=node:node . .

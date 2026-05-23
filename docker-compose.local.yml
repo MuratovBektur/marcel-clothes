@@ -1,0 +1,54 @@
+name: marcel-clothes_local
+
+services:
+
+  client:
+    container_name: "marcel-clothes_client_local"
+    build:
+      context: client
+      dockerfile: Dockerfile_local
+    expose:
+      - 3000
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+   
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./client:/app
+      - /app/node_modules
+
+  server:
+    container_name: "marcel-clothes_server_local"
+    user: "${UID:-1000}:${GID:-1000}"
+    restart: always
+    build:
+      context: server
+      dockerfile: Dockerfile_local
+    env_file:
+      - ./.env.local
+    expose:
+      - 5000
+    environment:
+      - NODE_ENV=development
+    command: npm run start:dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./server:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+  nginx:
+    image: nginx
+    restart: "no"
+    container_name: "marcel-clothes_nginx_local"
+    ports:
+      - 7024:80
+    depends_on:
+      - client
+      - server
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./nginx/local:/etc/nginx/conf.d
+      - ./uploads:/usr/share/nginx/uploads

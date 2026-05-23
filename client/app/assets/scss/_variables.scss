@@ -1,0 +1,19 @@
+// ── V3 Classic Palette ──────────────────────────────────
+$navy:        #1a2744;
+$navy-2:      #243360;
+$navy-3:      #0f1a30;
+$cream:       #f6f1e9;
+$cream-2:     #ede7db;
+$cream-3:     #e0d8cc;
+$gold:        #b8902a;
+$gold-2:      #d4aa40;
+$text:        #2a2a2a;
+$text-muted:  #7a7268;
+
+// ── Aliases (для совместимости с оставшимися местами) ───
+$black:  $navy-3;
+$white:  $cream;
+$grey:   $text-muted;
+$red:    $gold;    // заменяем красный на золото везде, где был $red
+
+$container-max-width: 1440px;

@@ -1,0 +1,29 @@
+{
+  "name": "client",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "sitemap": "node scripts/update-all-sitemaps.cjs",
+    "sitemap:brands": "node scripts/update-brands-sitemap.cjs",
+    "sitemap:products": "node scripts/update-products-sitemap.cjs",
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "start": "node .output/server/index.mjs",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxt/image": "^2.0.0",
+    "debounce": "^3.0.0",
+    "normalize.css": "^8.0.1",
+    "nuxt": "^4.3.1",
+    "reset-css": "^5.0.2",
+    "vue": "^3.5.29",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "sass": "^1.97.3"
+  }
+}
