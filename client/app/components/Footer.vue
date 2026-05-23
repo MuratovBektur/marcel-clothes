@@ -210,7 +210,7 @@ const year = new Date().getFullYear();
 
   // ── Responsive ─────────────────────────────────────
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1200px) {
     &__main {
       grid-template-columns: 1fr 1fr;
       gap: 40px;

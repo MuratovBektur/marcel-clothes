@@ -140,14 +140,14 @@
     <!-- ═══════════════════════════════════════════════ -->
     <!-- NEWSLETTER                                      -->
     <!-- ═══════════════════════════════════════════════ -->
-    <section class="newsletter">
+    <!-- <section class="newsletter">
       <h2 class="newsletter__title">Скидка 10% на <em>первый заказ</em></h2>
       <p class="newsletter__sub">Подпишитесь на новости и получите промокод на почту</p>
       <form class="newsletter__form" @submit.prevent>
         <input class="newsletter__input" type="email" placeholder="Введите ваш email" />
         <button class="newsletter__btn" type="submit">Получить скидку</button>
       </form>
-    </section>
+    </section> -->
 
   </div>
 </template>
@@ -208,7 +208,7 @@ useSeoMeta({
 </script>
 
 <style lang="scss" scoped>
-$bp: 1024px;
+$bp: 1200px;
 
 // ═══════════════════════════════════════════════════════════
 // HERO

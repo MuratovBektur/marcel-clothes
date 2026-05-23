@@ -204,7 +204,7 @@ const pageRange = computed(() => {
 </script>
 
 <style lang="scss" scoped>
-$bp: 1024px;
+$bp: 1200px;
 
 // ── Catalog wrapper ───────────────────────────────────────
 

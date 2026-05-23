@@ -1,8 +1,8 @@
 <template>
   <!-- Announcement bar -->
-  <div class="announce">
+  <!-- <div class="announce">
     Бесплатная доставка по Казахстану при заказе от <span>50 000 ₸</span> · Новая коллекция 2026
-  </div>
+  </div> -->
 
   <header class="header">
     <div class="header__inner">
@@ -128,7 +128,7 @@ const { count: favCount, isFavsHydrated } = useFavourites();
 </script>
 
 <style lang="scss" scoped>
-$bp: 1024px;
+$bp: 1200px;
 
 // ── Transitions ──────────────────────────────────────────
 
