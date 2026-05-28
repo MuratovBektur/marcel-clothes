@@ -14,10 +14,10 @@
             карточка
           </h1>
           <div class="hero__divider"></div>
-          <p class="hero__desc">
+          <!-- <p class="hero__desc">
             Каждый костюм Marsel проходит более 70 операций ручного пошива.
             Для тех, кто понимает — детали решают всё.
-          </p>
+          </p> -->
           <div class="hero__actions">
             <a href="#catalog" class="btn-gold">
               Смотреть коллекцию
@@ -30,21 +30,21 @@
         </div>
         <div class="hero__trust">
           <div class="hero__trust-item">
-            <div class="hero__trust-val">15+</div>
+            <div class="hero__trust-val">20</div>
             <div class="hero__trust-label">Лет опыта</div>
           </div>
           <div class="hero__trust-item">
-            <div class="hero__trust-val">4 000+</div>
-            <div class="hero__trust-label">Клиентов</div>
+            <div class="hero__trust-val">1 700 000</div>
+            <div class="hero__trust-label">Изделий</div>
           </div>
           <div class="hero__trust-item">
             <div class="hero__trust-val">100%</div>
             <div class="hero__trust-label">Качественные ткани</div>
           </div>
-          <div class="hero__trust-item">
+          <!-- <div class="hero__trust-item">
             <div class="hero__trust-val">70+</div>
             <div class="hero__trust-label">Ручных операций</div>
-          </div>
+          </div> -->
         </div>
       </div>
 
@@ -154,6 +154,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { producingStartedYear } from '~/constants/common';
 import ProductCardList from '~/components/MainPage/ProductCardList.vue';
 
 const gender   = ref('');
@@ -201,9 +202,12 @@ function onReset() {
 useSeoMeta({
   title: () => 'MARSEL — Мужские костюмы · Алматы',
   description: () =>
-    'Казахстанский дом мужских костюмов Marsel. Премиальные ткани, ручной пошив, индивидуальный крой с 2010 года.',
+    `Дом мужских костюмов Marsel. Премиальные ткани с ${producingStartedYear} года.`,
+  // description: () =>
+  //   `Дом мужских костюмов Marsel. Премиальные ткани, ручной пошив, индивидуальный крой с ${producingStartedYear} года.`,
   ogTitle: () => 'MARSEL — Мужские костюмы',
-  ogDescription: () => 'Премиальные ткани, ручной пошив, индивидуальный крой с 2010 года.',
+  ogDescription: () => `Премиальные ткани с ${producingStartedYear} года.`,
+  // ogDescription: () => `Премиальные ткани, ручной пошив, индивидуальный крой с ${producingStartedYear} года.`,
 });
 </script>
 

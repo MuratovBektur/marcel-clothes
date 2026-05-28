@@ -9,7 +9,7 @@
       <!-- Logo -->
       <a class="header__logo" @click.prevent="navigateToHome">
         <div class="header__logo-name">Marsel</div>
-        <div class="header__logo-sub">Мужские костюмы · с 2010</div>
+        <div class="header__logo-sub">Мужские костюмы · с {{ producingStartedYear }}</div>
       </a>
 
       <!-- Desktop nav -->
@@ -26,12 +26,8 @@
 
       <!-- Desktop: favourites -->
       <ClientOnly>
-        <NuxtLink
-          v-if="isFavsHydrated"
-          to="/favourites"
-          class="header__fav header__fav--desktop"
-          :class="{ 'header__fav--has': favCount > 0 }"
-        >
+        <NuxtLink v-if="isFavsHydrated" to="/favourites" class="header__fav header__fav--desktop"
+          :class="{ 'header__fav--has': favCount > 0 }">
           <span class="header__fav-icon">{{ favCount > 0 ? '♥' : '♡' }}</span>
           <span class="header__fav-label">Избранное</span>
           <span v-if="favCount > 0" class="header__fav-badge">{{ favCount }}</span>
@@ -43,24 +39,15 @@
       <div class="header__mobile-group">
         <ClientOnly>
           <Transition name="fav-fade">
-            <NuxtLink
-              v-if="isFavsHydrated"
-              to="/favourites"
-              class="header__mobile-fav"
-              :class="{ 'header__mobile-fav--has': favCount > 0 }"
-              aria-label="Избранное"
-            >
+            <NuxtLink v-if="isFavsHydrated" to="/favourites" class="header__mobile-fav"
+              :class="{ 'header__mobile-fav--has': favCount > 0 }" aria-label="Избранное">
               {{ favCount > 0 ? '♥' : '♡' }}
               <span v-if="favCount > 0" class="header__mobile-fav-badge">{{ favCount }}</span>
             </NuxtLink>
           </Transition>
         </ClientOnly>
-        <button
-          class="header__burger"
-          :class="{ 'header__burger--open': menuOpen }"
-          @click="menuOpen = !menuOpen"
-          aria-label="Меню"
-        >
+        <button class="header__burger" :class="{ 'header__burger--open': menuOpen }" @click="menuOpen = !menuOpen"
+          aria-label="Меню">
           <span class="header__burger-line" />
           <span class="header__burger-line" />
           <span class="header__burger-line" />
@@ -75,24 +62,16 @@
 
     <!-- Mobile drawer -->
     <Transition name="drawer">
-      <div
-        v-if="menuOpen"
-        class="header__drawer"
-        @click.self="menuOpen = false"
-      >
+      <div v-if="menuOpen" class="header__drawer" @click.self="menuOpen = false">
         <div class="header__drawer-panel">
-          <button
-            class="header__drawer-close"
-            @click="menuOpen = false"
-            aria-label="Закрыть"
-          >
+          <button class="header__drawer-close" @click="menuOpen = false" aria-label="Закрыть">
             <span /><span />
           </button>
 
           <div class="header__drawer-logo">
             Marsel<span>.</span>
           </div>
-          <div class="header__drawer-sub">Мужские костюмы · с 2010</div>
+          <div class="header__drawer-sub">Мужские костюмы · с {{ producingStartedYear }}</div>
 
           <nav class="header__drawer-nav">
             <NuxtLink to="/" class="header__drawer-link" @click="menuOpen = false">Костюмы</NuxtLink>
@@ -111,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { producingStartedYear } from '~/constants/common';
 import { ref } from 'vue';
 import SearchBar from './SearchBar.vue';
 
@@ -135,6 +115,7 @@ $bp: 1200px;
 .fav-fade-enter-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
+
 .fav-fade-enter-from {
   opacity: 0;
   transform: translateY(-4px);
@@ -144,17 +125,21 @@ $bp: 1200px;
 .drawer-leave-active {
   transition: opacity 0.25s ease;
 }
+
 .drawer-enter-from,
 .drawer-leave-to {
   opacity: 0;
 }
+
 .drawer-enter-active .header__drawer-panel,
 .drawer-leave-active .header__drawer-panel {
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .drawer-enter-from .header__drawer-panel {
   transform: translateX(100%);
 }
+
 .drawer-leave-to .header__drawer-panel {
   transform: translateX(100%);
 }
@@ -419,10 +404,12 @@ $bp: 1200px;
   .header__burger-line:nth-child(1) {
     transform: translateY(7px) rotate(45deg);
   }
+
   .header__burger-line:nth-child(2) {
     opacity: 0;
     transform: scaleX(0);
   }
+
   .header__burger-line:nth-child(3) {
     transform: translateY(-7px) rotate(-45deg);
   }
@@ -480,8 +467,13 @@ $bp: 1200px;
     background: $navy;
     border-radius: 1px;
 
-    &:first-child { transform: rotate(45deg); }
-    &:last-child  { transform: rotate(-45deg); }
+    &:first-child {
+      transform: rotate(45deg);
+    }
+
+    &:last-child {
+      transform: rotate(-45deg);
+    }
   }
 }
 
@@ -495,7 +487,9 @@ $bp: 1200px;
   color: $navy;
   line-height: 1;
 
-  span { color: $gold; }
+  span {
+    color: $gold;
+  }
 }
 
 .header__drawer-sub {
@@ -558,7 +552,9 @@ $bp: 1200px;
   font-weight: 400;
   transition: color 0.2s;
 
-  &:hover { color: $gold; }
+  &:hover {
+    color: $gold;
+  }
 }
 
 // ── Responsive ──────────────────────────────────────────
@@ -570,22 +566,53 @@ $bp: 1200px;
     gap: 0;
   }
 
-  .header__logo-name { font-size: 26px; letter-spacing: 4px; }
-  .header__logo-sub  { font-size: 7.5px; letter-spacing: 2.5px; }
+  .header__logo-name {
+    font-size: 26px;
+    letter-spacing: 4px;
+  }
 
-  .header__nav               { display: none; }
-  .header__search-wrap--desktop { display: none; }
-  .header__fav--desktop      { display: none; }
-  .header__fav-placeholder   { display: none; }
+  .header__logo-sub {
+    font-size: 7.5px;
+    letter-spacing: 2.5px;
+  }
 
-  .header__mobile-group { display: flex; }
+  .header__nav {
+    display: none;
+  }
 
-  .header__search-row { display: block; }
+  .header__search-wrap--desktop {
+    display: none;
+  }
+
+  .header__fav--desktop {
+    display: none;
+  }
+
+  .header__fav-placeholder {
+    display: none;
+  }
+
+  .header__mobile-group {
+    display: flex;
+  }
+
+  .header__search-row {
+    display: block;
+  }
 }
 
 @media (max-width: 375px) {
-  .header__inner { height: 52px; }
-  .header__logo-name { font-size: 22px; letter-spacing: 3px; }
-  .header__logo-sub  { display: none; }
+  .header__inner {
+    height: 52px;
+  }
+
+  .header__logo-name {
+    font-size: 22px;
+    letter-spacing: 3px;
+  }
+
+  .header__logo-sub {
+    display: none;
+  }
 }
 </style>

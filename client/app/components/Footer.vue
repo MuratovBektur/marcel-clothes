@@ -4,15 +4,17 @@
       <!-- Brand -->
       <div class="footer__brand">
         <div class="footer__logo">Marsel<span>.</span></div>
-        <div class="footer__logo-sub">Мужские костюмы · с 2010 года</div>
+        <div class="footer__logo-sub">Мужские костюмы · с {{ producingStartedYear }} года</div>
         <p class="footer__desc">
-          Казахстанский дом мужских костюмов.
-          Ручной пошив, безупречный крой с 2010 года.
+          Дом мужских костюмов.
+          <!-- Ручной пошив,  -->
+          <!-- безупречный крой -->
+           с {{ producingStartedYear }} года.
         </p>
         <div class="footer__social">
-          <a href="#" class="footer__social-btn" aria-label="Instagram">IG</a>
-          <a href="#" class="footer__social-btn" aria-label="WhatsApp">WA</a>
-          <a href="#" class="footer__social-btn" aria-label="Telegram">TG</a>
+          <a :href="instagramLink" target="_blank" class="footer__social-btn" aria-label="Instagram">IG</a>
+          <a :href="whatsappLink" target="_blank" class="footer__social-btn" aria-label="WhatsApp">WA</a>
+          <a :href="telegramLink" target="_blank" class="footer__social-btn" aria-label="Telegram">TG</a>
         </div>
       </div>
 
@@ -25,6 +27,9 @@
           <li><RouterLink to="/" class="footer__link">Slim Fit</RouterLink></li>
           <li><RouterLink to="/" class="footer__link">Летние</RouterLink></li>
           <li><RouterLink to="/" class="footer__link">Вечерние</RouterLink></li>
+          <li><RouterLink to="/" class="footer__link">Оверсайз</RouterLink></li>
+          <li><RouterLink to="/" class="footer__link">Спорт класс</RouterLink></li>
+          <li><RouterLink to="/" class="footer__link">Кэжуал</RouterLink></li>
         </ul>
       </div>
 
@@ -34,13 +39,13 @@
         <ul class="footer__links">
           <li><RouterLink to="/about" class="footer__link">О нас</RouterLink></li>
           <li><RouterLink to="/contacts" class="footer__link">Контакты</RouterLink></li>
-          <li><a href="#" class="footer__link">Пошив на заказ</a></li>
-          <li><a href="#" class="footer__link">Блог о стиле</a></li>
+          <!-- <li><a href="#" class="footer__link">Пошив на заказ</a></li>
+          <li><a href="#" class="footer__link">Блог о стиле</a></li> -->
         </ul>
       </div>
 
       <!-- Помощь -->
-      <div class="footer__col">
+      <!-- <div class="footer__col">
         <div class="footer__col-title">Помощь</div>
         <ul class="footer__links">
           <li><a href="#" class="footer__link">Таблица размеров</a></li>
@@ -48,22 +53,27 @@
           <li><a href="#" class="footer__link">Возврат и обмен</a></li>
           <li><a href="#" class="footer__link">Уход за костюмом</a></li>
         </ul>
-      </div>
+      </div> -->
     </div>
 
     <div class="footer__bottom">
       <span class="footer__copy">© {{ year }} Marsel. Все права защищены.</span>
-      <span class="footer__copy footer__copy--center">Алматы · +7 (727) 000-00-00 · marsel@example.com</span>
-      <span class="footer__copy">
+      <span class="footer__copy footer__copy--center">
+        Бишкек · +996 (707) 27-33-67 
+        <!-- · marsel@example.com -->
+      </span>
+      <!-- <span class="footer__copy">
         <a href="#" class="footer__bottom-link">Конфиденциальность</a>
         &nbsp;·&nbsp;
         <a href="#" class="footer__bottom-link">Оферта</a>
-      </span>
+      </span> -->
     </div>
   </footer>
 </template>
 
 <script setup>
+import { producingStartedYear, instagramLink, whatsappLink, telegramLink } from '~/constants/common'
+
 const year = new Date().getFullYear();
 </script>
 

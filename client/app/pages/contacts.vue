@@ -24,8 +24,8 @@
               <div>
                 <div class="contacts__item-label">Адрес</div>
                 <div class="contacts__item-val">
-                  Алматы, ул. Абая 1<br>
-                  БЦ «Достык», офис 502
+                  Кыргызстан, г. Бишкек<br>
+                  Дордой / Форт Оберон / Европа 3 проход 383/384/ 526/527/528
                 </div>
               </div>
             </div>
@@ -38,8 +38,8 @@
               </div>
               <div>
                 <div class="contacts__item-label">Телефон</div>
-                <a href="tel:+77270000000" class="contacts__item-val contacts__item-val--link">
-                  +7 (727) 000-00-00
+                <a href="tel:+996707273367" class="contacts__item-val contacts__item-val--link">
+                  +996 (707) 27-33-67
                 </a>
               </div>
             </div>
@@ -53,8 +53,8 @@
               </div>
               <div>
                 <div class="contacts__item-label">Email</div>
-                <a href="mailto:info@marsel.kz" class="contacts__item-val contacts__item-val--link">
-                  info@marsel.kz
+                <a href="mailto:parhatgulamov@icloud.com" class="contacts__item-val contacts__item-val--link">
+                  parhatgulamov@icloud.com
                 </a>
               </div>
             </div>
@@ -69,8 +69,7 @@
               <div>
                 <div class="contacts__item-label">Режим работы</div>
                 <div class="contacts__item-val">
-                  Пн — Пт: 09:00 — 19:00<br>
-                  Сб: 10:00 — 17:00
+                   07:00 — 15:00
                 </div>
               </div>
             </div>
@@ -79,9 +78,9 @@
           <div class="contacts__socials">
             <div class="contacts__socials-label">Мы в соцсетях</div>
             <div class="contacts__socials-row">
-              <a href="#" class="contacts__social-btn">Instagram</a>
-              <a href="#" class="contacts__social-btn">WhatsApp</a>
-              <a href="#" class="contacts__social-btn">Telegram</a>
+              <a :href="instagramLink" target="_blank" class="contacts__social-btn">Instagram</a>
+              <a :href="whatsappLink" target="_blank" class="contacts__social-btn">WhatsApp</a>
+              <a :href="telegramLink" target="_blank" class="contacts__social-btn">Telegram</a>
             </div>
           </div>
         </div>
@@ -125,6 +124,8 @@
 </template>
 
 <script setup lang="ts">
+import { instagramLink, whatsappLink, telegramLink } from '~/constants/common'
+
 useSeoMeta({
   title: () => 'Контакты — Marsel, мужские костюмы Алматы',
   description: () =>

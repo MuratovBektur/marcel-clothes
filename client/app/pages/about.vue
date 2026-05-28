@@ -6,9 +6,10 @@
         <div class="about__eyebrow">О бренде</div>
         <h1 class="about__title">Пятнадцать лет <em>мастерства</em></h1>
         <p class="about__lead">
-          Marsel — казахстанский дом мужской одежды, основанный в 2010 году.
+          Marsel — Дом мужской одежды, основанный в {{ producingStartedYear }} году.
           Мы специализируемся на костюмах для деловых людей, которые ценят
-          качество тканей и безупречный крой.
+          качество тканей.
+          <!-- и безупречный крой. -->
         </p>
       </div>
     </div>
@@ -16,19 +17,19 @@
     <!-- Stats -->
     <div class="about__stats-bar">
       <div class="about__stat">
-        <div class="about__stat-num">15+</div>
+        <div class="about__stat-num">20</div>
         <div class="about__stat-label">Лет на рынке</div>
       </div>
       <div class="about__stats-sep"></div>
       <div class="about__stat">
-        <div class="about__stat-num">4 000+</div>
-        <div class="about__stat-label">Клиентов</div>
+        <div class="about__stat-num">1 700 000</div>
+        <div class="about__stat-label">Изделий</div>
       </div>
       <div class="about__stats-sep"></div>
-      <div class="about__stat">
+      <!-- <div class="about__stat">
         <div class="about__stat-num">70+</div>
         <div class="about__stat-label">Ручных операций</div>
-      </div>
+      </div> -->
       <div class="about__stats-sep"></div>
       <div class="about__stat">
         <div class="about__stat-num">100%</div>
@@ -47,24 +48,24 @@
             Шерсть, кашемир, лён и шёлк — строгий отбор на каждом этапе.
           </p>
         </div>
-        <div class="about__card">
+        <!-- <div class="about__card">
           <div class="about__card-num">02</div>
           <div class="about__card-title">Ручной пошив</div>
           <p class="about__card-text">
             Каждый костюм проходит более 70 операций ручного пошива.
             Наши мастера — это люди с многолетним опытом.
           </p>
-        </div>
-        <div class="about__card">
+        </div> -->
+        <!-- <div class="about__card">
           <div class="about__card-num">03</div>
           <div class="about__card-title">Индивидуальный крой</div>
           <p class="about__card-text">
             Снимаем более 20 мерок и учитываем особенности вашей фигуры
             для идеальной посадки каждого изделия.
           </p>
-        </div>
+        </div> -->
         <div class="about__card">
-          <div class="about__card-num">04</div>
+          <div class="about__card-num">02</div>
           <div class="about__card-title">Гарантия качества</div>
           <p class="about__card-text">
             Бесплатная подгонка в течение 30 дней после получения заказа.
@@ -77,13 +78,18 @@
 </template>
 
 <script setup lang="ts">
+import { producingStartedYear } from '~/constants/common';
 useSeoMeta({
-  title: () => 'О нас — Marsel, казахстанский дом мужских костюмов',
+  title: () => 'О нас — Marsel, Дом мужских костюмов',
   description: () =>
-    'Marsel — казахстанский дом мужской одежды с 2010 года. Премиальные ткани, ручной пошив, индивидуальный крой.',
+    `Marsel — Дом мужской одежды с ${producingStartedYear} года. Премиальные ткани.`,
+  // description: () =>
+    // `Marsel — Дом мужской одежды с ${producingStartedYear} года. Премиальные ткани,  индивидуальный крой.`,
   ogTitle: () => 'О нас — Marsel',
   ogDescription: () =>
-    'Marsel — казахстанский дом мужской одежды с 2010 года. Ручной пошив, индивидуальный крой.',
+    `Marsel — Дом мужской одежды с ${producingStartedYear} года.`,
+  // ogDescription: () =>
+    // `Marsel — Дом мужской одежды с ${producingStartedYear} года.  индивидуальный крой.`,
 });
 </script>
 
