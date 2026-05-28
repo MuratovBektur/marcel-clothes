@@ -388,3 +388,11 @@ export const GENDER_CATEGORIES: Record<string, string[]> = {
 };
 
 export const MAX_EXTRA_PHOTOS = 10;
+
+export const SUIT_TYPES = [
+  'Костюм тройка (пиджак + брюки + жилет)',
+  'Двойка (пиджак + брюки)',
+  'Пиджак',
+  'Брюки',
+  'Двойка (жилет + брюки)',
+];

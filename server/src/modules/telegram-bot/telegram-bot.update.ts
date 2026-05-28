@@ -442,7 +442,7 @@ export class TelegramBotUpdate implements OnModuleInit {
       return;
     }
     await ctx.editMessageCaption(
-      `🗑 *Удалить товар?*\n\n👤 ${product.gender} | 📂 ${product.category} | 👔 ${product.type}\n💰 ${product.price} · 🌍 ${product.country}`,
+      `🗑 *Удалить товар?*\n\n👔 ${product.type}\n💰 ${product.price}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -490,7 +490,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     await ctx.answerCbQuery();
     if (!product) return;
     await ctx.editMessageCaption(
-      `🗑 *Удалить товар?*\n\n👤 ${product.gender} | 📂 ${product.category} | 👔 ${product.type}\n💰 ${product.price} · 🌍 ${product.country}`,
+      `🗑 *Удалить товар?*\n\n👔 ${product.type}\n💰 ${product.price}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -528,8 +528,8 @@ export class TelegramBotUpdate implements OnModuleInit {
     if (!p) return;
     const caption =
       `✅ *Товар добавлен!*\n\n` +
-      `👤 *Пол:* ${p.gender}\n📂 *Категория:* ${p.category}\n👔 *Тип:* ${p.type}\n` +
-      `🌍 *Страна:* ${p.country}\n💰 *Цена:* ${p.price}\n` +
+      `👔 *Тип:* ${p.type}\n` +
+      `💰 *Цена:* ${p.price}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
       (p.description ? `📝 *Описание:* ${p.description}\n` : '') +
@@ -629,8 +629,8 @@ export class TelegramBotUpdate implements OnModuleInit {
     const p = result.data[0];
 
     const caption =
-      `👤 *Пол:* ${p.gender}\n📂 *Категория:* ${p.category}\n👔 *Тип:* ${p.type}\n` +
-      `🌍 *Страна:* ${p.country}\n💰 *Цена:* ${p.price}\n` +
+      `👔 *Тип:* ${p.type}\n` +
+      `💰 *Цена:* ${p.price}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
       (p.description ? `📝 *Описание:* ${p.description}\n` : '') +

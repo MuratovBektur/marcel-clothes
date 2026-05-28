@@ -13,20 +13,14 @@ export class TgGroupService {
     const toTag = (v: string) =>
       '#' + v.replace(/[^а-яёa-z0-9]/gi, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
     const hashtags = [
-      toTag(p.gender), toTag(p.category), toTag(p.type),
-      ...(p.brand ? [toTag(p.brand)] : []),
-      toTag(p.country),
+      toTag(p.type),
       ...(p.materials ?? []).map(toTag),
       ...(p.colors ?? []).map(toTag),
       ...(p.sizes ?? []).map(toTag),
     ].join(' ');
 
     return (
-      `<b>Пол:</b> ${esc(p.gender)}\n` +
-      `<b>Категория:</b> ${esc(p.category)}\n` +
       `<b>Тип:</b> ${esc(p.type)}\n` +
-      (p.brand ? `<b>Бренд:</b> ${esc(p.brand)}\n` : '') +
-      `<b>Страна:</b> ${esc(p.country)}\n` +
       `<b>Цена:</b> ${esc(p.price)}\n` +
       `<b>Материалы:</b> ${(p.materials ?? []).map(esc).join(', ')}\n` +
       `<b>Цвета:</b> ${(p.colors ?? []).map(esc).join(', ')}\n` +

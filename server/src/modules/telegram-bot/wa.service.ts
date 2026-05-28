@@ -171,20 +171,14 @@ export class WaService implements OnModuleDestroy {
     const toTag = (v: string) =>
       '#' + v.replace(/[^а-яёa-z0-9]/gi, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
     const hashtags = [
-      toTag(p.gender), toTag(p.category), toTag(p.type),
-      ...(p.brand ? [toTag(p.brand)] : []),
-      toTag(p.country),
+      toTag(p.type),
       ...(p.materials ?? []).map(toTag),
       ...(p.colors ?? []).map(toTag),
       ...(p.sizes ?? []).map(toTag),
     ].join(' ');
 
     return (
-      `Пол: ${p.gender}\n` +
-      `Категория: ${p.category}\n` +
       `Тип: ${p.type}\n` +
-      (p.brand ? `Бренд: ${p.brand}\n` : '') +
-      `Страна: ${p.country}\n` +
       `Цена: ${p.price}\n` +
       `Материалы: ${(p.materials ?? []).join(', ')}\n` +
       `Цвета: ${(p.colors ?? []).join(', ')}\n` +

@@ -11,19 +11,7 @@ export class Product {
   id!: string;
 
   @Column()
-  gender!: string;
-
-  @Column()
-  category!: string;
-
-  @Column()
   type!: string;
-
-  @Column({ type: 'text', nullable: true, default: null })
-  brand!: string | null;
-
-  @Column()
-  country!: string;
 
   @Column()
   price!: string;

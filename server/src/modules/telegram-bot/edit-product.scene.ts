@@ -6,20 +6,13 @@ import { FileStorageService } from './file-storage.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import {
-  CATEGORIES,
   COLORS,
-  COUNTRIES,
   EDIT_SCENE_ID,
   MAIN_KEYBOARD,
-  GENDER_CATEGORIES,
-  GENDER_TYPE_EXCLUSIONS,
-  GENDERS,
-  KIDS_GENDERS,
   MATERIALS,
   MAX_EXTRA_PHOTOS,
-  OWN_PRODUCTION,
-  SHOES_CATEGORY,
   SIZES,
+  SUIT_TYPES,
 } from './constants';
 
 const PRICE_RE = /^\d+(\.\d+)?\s+(сом|рубль|доллар)$/i;
@@ -29,30 +22,17 @@ const DONE_TEXT = '✅ Готово';
 
 const BACK_CB = 'ef_back';
 const SAVE_CB = 'ef_save';
-const E_COUNTRY_OTHER_CB = 'ef_country_other';
 const E_MAT_CUSTOM_CB = 'ef_mat_custom';
 const E_COL_CUSTOM_CB = 'ef_col_custom';
 const E_SIZE_CUSTOM_CB = 'ef_size_custom';
 
 interface EditState {
   productId: string;
-  category: string;
-  gender: string;
-  editingField:
-    | 'brand'
-    | 'price'
-    | 'country'
-    | 'description'
-    | 'photo'
-    | 'extra_photos'
-    | null;
+  editingField: 'price' | 'description' | 'photo' | 'extra_photos' | null;
   editingMulti: 'materials' | 'colors' | 'sizes' | null;
   selectedItems: string[];
-  waitingForCustomCountry: boolean;
   waitingForCustom: 'material' | 'color' | 'size' | null;
-  editingCascade: 'gender' | 'category' | 'type' | null;
-  pendingGender: string | null;
-  pendingCategory: string | null;
+  editingType: boolean;
   newExtraPhotos: string[];
 }
 
@@ -94,12 +74,6 @@ function multiSelectMarkup(
   return Markup.inlineKeyboard(rows);
 }
 
-function getSizeList(category?: string, gender?: string): string[] {
-  if (category === SHOES_CATEGORY) return SIZES.shoes;
-  if (gender && KIDS_GENDERS.includes(gender)) return SIZES.kids;
-  return SIZES.default;
-}
-
 async function removeReplyKeyboard(ctx: any) {
   const msg: any = await ctx.reply('↩️', Markup.removeKeyboard());
   await ctx.deleteMessage(msg.message_id);
@@ -138,16 +112,11 @@ export class EditProductScene {
 
     Object.assign(ctx.scene.state, {
       productId,
-      category: product.category,
-      gender: product.gender,
       editingField: null,
       editingMulti: null,
       selectedItems: [],
-      waitingForCustomCountry: false,
       waitingForCustom: null,
-      editingCascade: null,
-      pendingGender: null,
-      pendingCategory: null,
+      editingType: false,
       newExtraPhotos: [],
     } satisfies EditState);
 
@@ -161,11 +130,8 @@ export class EditProductScene {
     state.editingField = null;
     state.editingMulti = null;
     state.selectedItems = [];
-    state.waitingForCustomCountry = false;
     state.waitingForCustom = null;
-    state.editingCascade = null;
-    state.pendingGender = null;
-    state.pendingCategory = null;
+    state.editingType = false;
     state.newExtraPhotos = [];
 
     if (!product) {
@@ -174,11 +140,7 @@ export class EditProductScene {
 
     const text =
       `✏️ *Редактирование товара*\n\n` +
-      `👤 *Пол:* ${product.gender}\n` +
-      `📂 *Категория:* ${product.category}\n` +
       `👔 *Тип:* ${product.type}\n` +
-      (product.brand ? `🏷 *Бренд:* ${product.brand}\n` : '') +
-      `🌍 *Страна:* ${product.country}\n` +
       `💰 *Цена:* ${product.price}\n` +
       `🧵 *Материалы:* ${product.materials.join(', ')}\n` +
       `🎨 *Цвета:* ${product.colors.join(', ')}\n` +
@@ -192,18 +154,8 @@ export class EditProductScene {
     await ctx.reply(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        [
-          Markup.button.callback('👤 Пол', 'ef:gender'),
-          Markup.button.callback('📂 Категория', 'ef:category'),
-          Markup.button.callback('👔 Тип', 'ef:type'),
-        ],
-        [
-          Markup.button.callback('🏷 Бренд', 'ef:brand'),
-          Markup.button.callback('🌍 Страна', 'ef:country'),
-        ],
-        [
-          Markup.button.callback('💰 Цена', 'ef:price'),
-        ],
+        [Markup.button.callback('👔 Тип', 'ef:type')],
+        [Markup.button.callback('💰 Цена', 'ef:price')],
         [
           Markup.button.callback('🧵 Материалы', 'ef:materials'),
           Markup.button.callback('🎨 Цвета', 'ef:colors'),
@@ -275,110 +227,38 @@ export class EditProductScene {
     state.editingField = null;
     state.editingMulti = null;
     state.selectedItems = [];
-    state.waitingForCustomCountry = false;
     state.waitingForCustom = null;
-    state.editingCascade = null;
-    state.pendingGender = null;
-    state.pendingCategory = null;
+    state.editingType = false;
     state.newExtraPhotos = [];
     await ctx.answerCbQuery('◀️');
     await this.showEditMenu(ctx);
   }
 
-  // ═══ Пол → Категория → Тип (каскад) ══════════════════════════════════════════
-
-  @Action('ef:gender')
-  async onEditGender(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    state.editingCascade = 'gender';
-    await ctx.answerCbQuery();
-    await this.sendGenderKeyboard(ctx, state.gender);
-  }
-
-  @Action('ef:category')
-  async onEditCategory(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    state.editingCascade = 'category';
-    state.pendingGender = state.gender;
-    await ctx.answerCbQuery();
-    await this.sendCategoryKeyboard(ctx, state.gender, state.category);
-  }
+  // ═══ Тип костюма ══════════════════════════════════════════════════════════════
 
   @Action('ef:type')
   async onEditType(@Ctx() ctx: any) {
     const state = getState(ctx);
-    state.editingCascade = 'type';
-    state.pendingGender = state.gender;
-    state.pendingCategory = state.category;
+    state.editingType = true;
     await ctx.answerCbQuery();
-    await this.sendTypeKeyboard(ctx, state.category, state.gender, undefined);
+    await this.sendSuitTypeKeyboard(ctx);
   }
 
-  @Action(/^egender:(.+)/)
-  async onGenderSelect(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    if (state.editingCascade !== 'gender') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    const gender = (ctx.callbackQuery.data as string).replace('egender:', '');
-    state.pendingGender = gender;
-    state.editingCascade = 'category';
-    await ctx.answerCbQuery(`✅ ${gender}`);
-    await this.sendCategoryKeyboard(ctx, gender, undefined);
-  }
-
-  @Action(/^ecat:(.+)/)
-  async onCategorySelect(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    if (state.editingCascade !== 'category') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    const category = (ctx.callbackQuery.data as string).replace('ecat:', '');
-    state.pendingCategory = category;
-    state.editingCascade = 'type';
-    await ctx.answerCbQuery(`✅ ${category}`);
-    await this.sendTypeKeyboard(ctx, category, state.pendingGender!, undefined);
-  }
-
-  @Action(/^etype:(.+)/)
+  @Action(/^etype:(\d+)$/)
   async onTypeSelect(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingCascade !== 'type') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    const type = (ctx.callbackQuery.data as string).replace('etype:', '');
-
-    const updateData: Record<string, string> = { type };
-    if (state.pendingGender && state.pendingGender !== state.gender) {
-      updateData.gender = state.pendingGender;
-    }
-    if (state.pendingCategory && state.pendingCategory !== state.category) {
-      updateData.category = state.pendingCategory;
-    }
-
-    await this.productsService.update(state.productId, updateData);
-
-    if (updateData.gender) state.gender = updateData.gender;
-    if (updateData.category) state.category = updateData.category;
-
+    if (!state.editingType) { await ctx.answerCbQuery(); return; }
+    const idx = parseInt((ctx.callbackQuery.data as string).replace('etype:', ''), 10);
+    const type = SUIT_TYPES[idx];
+    if (!type) { await ctx.answerCbQuery(); return; }
+    await this.productsService.update(state.productId, { type });
+    state.editingType = false;
     await ctx.answerCbQuery('✅ Сохранено!');
-    await ctx.reply('✅ Данные обновлены!');
+    await ctx.reply('✅ Тип обновлён!');
     await this.showEditMenu(ctx);
   }
 
   // ═══ Цена ══════════════════════════════════════════════════════════════════════
-
-  @Action('ef:brand')
-  async onEditBrand(@Ctx() ctx: any) {
-    getState(ctx).editingField = 'brand';
-    await ctx.answerCbQuery();
-    await ctx.reply('🏷 Введите новое название бренда:', {
-      ...Markup.keyboard([[BACK_TEXT]]).resize(),
-    });
-  }
 
   @Action('ef:price')
   async onEditPrice(@Ctx() ctx: any) {
@@ -393,46 +273,6 @@ export class EditProductScene {
     );
   }
 
-  // ═══ Страна ════════════════════════════════════════════════════════════════════
-
-  @Action('ef:country')
-  async onEditCountry(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    state.editingField = 'country';
-    const product = await this.productsService.findOne(state.productId);
-    await ctx.answerCbQuery();
-    await this.sendCountryKeyboard(ctx, product?.country);
-  }
-
-  @Action(/^ecountry:(.+)/)
-  async onCountrySelect(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    if (state.editingField !== 'country') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    const country = (ctx.callbackQuery.data as string).replace('ecountry:', '');
-    await this.productsService.update(state.productId, { country });
-    state.editingField = null;
-    await ctx.answerCbQuery(`✅ ${country}`);
-    await ctx.reply('✅ Страна обновлена!');
-    await this.showEditMenu(ctx);
-  }
-
-  @Action(E_COUNTRY_OTHER_CB)
-  async onCountryOther(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    if (state.editingField !== 'country') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    state.waitingForCustomCountry = true;
-    await ctx.answerCbQuery();
-    await ctx.reply('✏️ Введите страну производства:', {
-      ...Markup.keyboard([[BACK_TEXT]]).resize(),
-    });
-  }
-
   // ═══ Материалы ═════════════════════════════════════════════════════════════════
 
   @Action('ef:materials')
@@ -444,40 +284,25 @@ export class EditProductScene {
     await ctx.answerCbQuery();
     await ctx.reply('🧵 *Выберите материалы:*\n_Текущие отмечены ✅_', {
       parse_mode: 'Markdown',
-      ...multiSelectMarkup(
-        MATERIALS,
-        state.selectedItems,
-        'emat',
-        E_MAT_CUSTOM_CB,
-      ),
+      ...multiSelectMarkup(MATERIALS, state.selectedItems, 'emat', E_MAT_CUSTOM_CB),
     });
   }
 
   @Action(/^emat:(.+)/)
   async onMaterialToggle(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingMulti !== 'materials') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    toggle(
-      state.selectedItems,
-      (ctx.callbackQuery.data as string).replace('emat:', ''),
-    );
+    if (state.editingMulti !== 'materials') { await ctx.answerCbQuery(); return; }
+    toggle(state.selectedItems, (ctx.callbackQuery.data as string).replace('emat:', ''));
     await ctx.answerCbQuery();
     await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(MATERIALS, state.selectedItems, 'emat', E_MAT_CUSTOM_CB)
-        .reply_markup,
+      multiSelectMarkup(MATERIALS, state.selectedItems, 'emat', E_MAT_CUSTOM_CB).reply_markup,
     );
   }
 
   @Action(E_MAT_CUSTOM_CB)
   async onMatCustom(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingMulti !== 'materials') {
-      await ctx.answerCbQuery();
-      return;
-    }
+    if (state.editingMulti !== 'materials') { await ctx.answerCbQuery(); return; }
     state.waitingForCustom = 'material';
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты материалов через запятую:', {
@@ -496,40 +321,25 @@ export class EditProductScene {
     await ctx.answerCbQuery();
     await ctx.reply('🎨 *Выберите цвета:*\n_Текущие отмечены ✅_', {
       parse_mode: 'Markdown',
-      ...multiSelectMarkup(
-        COLORS,
-        state.selectedItems,
-        'ecol',
-        E_COL_CUSTOM_CB,
-      ),
+      ...multiSelectMarkup(COLORS, state.selectedItems, 'ecol', E_COL_CUSTOM_CB),
     });
   }
 
   @Action(/^ecol:(.+)/)
   async onColorToggle(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingMulti !== 'colors') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    toggle(
-      state.selectedItems,
-      (ctx.callbackQuery.data as string).replace('ecol:', ''),
-    );
+    if (state.editingMulti !== 'colors') { await ctx.answerCbQuery(); return; }
+    toggle(state.selectedItems, (ctx.callbackQuery.data as string).replace('ecol:', ''));
     await ctx.answerCbQuery();
     await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(COLORS, state.selectedItems, 'ecol', E_COL_CUSTOM_CB)
-        .reply_markup,
+      multiSelectMarkup(COLORS, state.selectedItems, 'ecol', E_COL_CUSTOM_CB).reply_markup,
     );
   }
 
   @Action(E_COL_CUSTOM_CB)
   async onColCustom(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingMulti !== 'colors') {
-      await ctx.answerCbQuery();
-      return;
-    }
+    if (state.editingMulti !== 'colors') { await ctx.answerCbQuery(); return; }
     state.waitingForCustom = 'color';
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты цветов через запятую:', {
@@ -548,44 +358,25 @@ export class EditProductScene {
     await ctx.answerCbQuery();
     await ctx.reply('📏 *Выберите размеры:*\n_Текущие отмечены ✅_', {
       parse_mode: 'Markdown',
-      ...multiSelectMarkup(
-        getSizeList(state.category, state.gender),
-        state.selectedItems,
-        'esize',
-        E_SIZE_CUSTOM_CB,
-      ),
+      ...multiSelectMarkup(SIZES.default, state.selectedItems, 'esize', E_SIZE_CUSTOM_CB),
     });
   }
 
   @Action(/^esize:(.+)/)
   async onSizeToggle(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingMulti !== 'sizes') {
-      await ctx.answerCbQuery();
-      return;
-    }
-    toggle(
-      state.selectedItems,
-      (ctx.callbackQuery.data as string).replace('esize:', ''),
-    );
+    if (state.editingMulti !== 'sizes') { await ctx.answerCbQuery(); return; }
+    toggle(state.selectedItems, (ctx.callbackQuery.data as string).replace('esize:', ''));
     await ctx.answerCbQuery();
     await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(
-        getSizeList(state.category, state.gender),
-        state.selectedItems,
-        'esize',
-        E_SIZE_CUSTOM_CB,
-      ).reply_markup,
+      multiSelectMarkup(SIZES.default, state.selectedItems, 'esize', E_SIZE_CUSTOM_CB).reply_markup,
     );
   }
 
   @Action(E_SIZE_CUSTOM_CB)
   async onSizeCustom(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (state.editingMulti !== 'sizes') {
-      await ctx.answerCbQuery();
-      return;
-    }
+    if (state.editingMulti !== 'sizes') { await ctx.answerCbQuery(); return; }
     state.waitingForCustom = 'size';
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты размеров через запятую:', {
@@ -597,26 +388,14 @@ export class EditProductScene {
   @Action(SAVE_CB)
   async onSaveMulti(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (!state.editingMulti) {
-      await ctx.answerCbQuery();
-      return;
-    }
+    if (!state.editingMulti) { await ctx.answerCbQuery(); return; }
     if (!state.selectedItems.length) {
-      await ctx.answerCbQuery('Выберите хотя бы один вариант!', {
-        show_alert: true,
-      });
+      await ctx.answerCbQuery('Выберите хотя бы один вариант!', { show_alert: true });
       return;
     }
     const field = state.editingMulti;
-    await this.productsService.update(state.productId, {
-      [field]: state.selectedItems,
-    });
-    const label =
-      field === 'materials'
-        ? 'Материалы'
-        : field === 'colors'
-          ? 'Цвета'
-          : 'Размеры';
+    await this.productsService.update(state.productId, { [field]: state.selectedItems });
+    const label = field === 'materials' ? 'Материалы' : field === 'colors' ? 'Цвета' : 'Размеры';
     await ctx.answerCbQuery('✅ Сохранено!');
     await ctx.reply(`✅ ${label} обновлены!`);
     await this.showEditMenu(ctx);
@@ -699,8 +478,8 @@ export class EditProductScene {
 
     if (text === BACK_TEXT) {
       state.editingField = null;
-      state.waitingForCustomCountry = false;
       state.waitingForCustom = null;
+      state.editingType = false;
       state.newExtraPhotos = [];
       await removeReplyKeyboard(ctx);
       await this.showEditMenu(ctx);
@@ -710,19 +489,12 @@ export class EditProductScene {
     // Доп. фото — завершение
     if (text === DONE_TEXT && state.editingField === 'extra_photos') {
       if (!state.newExtraPhotos.length) {
-        await ctx.reply(
-          `Сначала отправьте хотя бы одно фото или нажмите "${BACK_TEXT}".`,
-        );
+        await ctx.reply(`Сначала отправьте хотя бы одно фото или нажмите "${BACK_TEXT}".`);
         return;
       }
       const product = await this.productsService.findOne(state.productId);
-      const combined = [
-        ...(product?.extraPhotos ?? []),
-        ...state.newExtraPhotos,
-      ];
-      await this.productsService.update(state.productId, {
-        extraPhotos: combined,
-      });
+      const combined = [...(product?.extraPhotos ?? []), ...state.newExtraPhotos];
+      await this.productsService.update(state.productId, { extraPhotos: combined });
       state.editingField = null;
       state.newExtraPhotos = [];
       await removeReplyKeyboard(ctx);
@@ -733,9 +505,7 @@ export class EditProductScene {
 
     // Пропустить описание
     if (text === SKIP_TEXT && state.editingField === 'description') {
-      await this.productsService.update(state.productId, {
-        description: null,
-      });
+      await this.productsService.update(state.productId, { description: null });
       state.editingField = null;
       await removeReplyKeyboard(ctx);
       await ctx.reply('✅ Описание удалено!');
@@ -743,27 +513,9 @@ export class EditProductScene {
       return;
     }
 
-    // Страна вручную
-    if (state.waitingForCustomCountry) {
-      if (!text) {
-        await ctx.reply('Введите название страны:');
-        return;
-      }
-      await this.productsService.update(state.productId, { country: text });
-      state.editingField = null;
-      state.waitingForCustomCountry = false;
-      await removeReplyKeyboard(ctx);
-      await ctx.reply('✅ Страна обновлена!');
-      await this.showEditMenu(ctx);
-      return;
-    }
-
     // Свой вариант multi-select
     if (state.waitingForCustom) {
-      const items = text
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const items = text.split(',').map((s) => s.trim()).filter(Boolean);
       if (!items.length) {
         await ctx.reply('Введите хотя бы один вариант через запятую.');
         return;
@@ -777,43 +529,13 @@ export class EditProductScene {
       }
       state.waitingForCustom = null;
       await removeReplyKeyboard(ctx);
-      const prefix =
-        state.editingMulti === 'materials'
-          ? 'emat'
-          : state.editingMulti === 'colors'
-            ? 'ecol'
-            : 'esize';
-      const customCb =
-        state.editingMulti === 'materials'
-          ? E_MAT_CUSTOM_CB
-          : state.editingMulti === 'colors'
-            ? E_COL_CUSTOM_CB
-            : E_SIZE_CUSTOM_CB;
-      const list =
-        state.editingMulti === 'materials'
-          ? MATERIALS
-          : state.editingMulti === 'colors'
-            ? COLORS
-            : getSizeList(state.category, state.gender);
+      const prefix = state.editingMulti === 'materials' ? 'emat' : state.editingMulti === 'colors' ? 'ecol' : 'esize';
+      const customCb = state.editingMulti === 'materials' ? E_MAT_CUSTOM_CB : state.editingMulti === 'colors' ? E_COL_CUSTOM_CB : E_SIZE_CUSTOM_CB;
+      const list = state.editingMulti === 'materials' ? MATERIALS : state.editingMulti === 'colors' ? COLORS : SIZES.default;
       await ctx.reply(
         `✅ Добавлено: *${added.join(', ')}*\n\nВыберите ещё из списка или нажмите *Сохранить*`,
-        {
-          parse_mode: 'Markdown',
-          ...multiSelectMarkup(list, state.selectedItems, prefix, customCb),
-        },
+        { parse_mode: 'Markdown', ...multiSelectMarkup(list, state.selectedItems, prefix, customCb) },
       );
-      return;
-    }
-
-    // Бренд
-    if (state.editingField === 'brand') {
-      await this.productsService.update(state.productId, {
-        brand: text === '—' ? null : text,
-      });
-      state.editingField = null;
-      await removeReplyKeyboard(ctx);
-      await ctx.reply('✅ Бренд обновлён!');
-      await this.showEditMenu(ctx);
       return;
     }
 
@@ -836,9 +558,7 @@ export class EditProductScene {
 
     // Описание
     if (state.editingField === 'description') {
-      await this.productsService.update(state.productId, {
-        description: text,
-      });
+      await this.productsService.update(state.productId, { description: text });
       state.editingField = null;
       await removeReplyKeyboard(ctx);
       await ctx.reply('✅ Описание обновлено!');
@@ -856,12 +576,9 @@ export class EditProductScene {
     if (!photo?.length) return;
     const fileId: string = photo[photo.length - 1].file_id;
 
-    // Главное фото
     if (state.editingField === 'photo') {
       const photoUrl = await this.fileStorage.saveFromFileId(fileId);
-      await this.productsService.update(state.productId, {
-        photos: [photoUrl],
-      });
+      await this.productsService.update(state.productId, { photos: [photoUrl] });
       state.editingField = null;
       await removeReplyKeyboard(ctx);
       await ctx.reply('✅ Главное фото обновлено!');
@@ -869,10 +586,8 @@ export class EditProductScene {
       return;
     }
 
-    // Доп. фото — поддержка альбомов (media_group_id) и одиночных фото
     if (state.editingField === 'extra_photos') {
       const mediaGroupId: string | undefined = ctx.message?.media_group_id;
-
       if (mediaGroupId) {
         const key = `${ctx.chat.id}_${mediaGroupId}`;
         const existing = this.mediaGroupBuffers.get(key);
@@ -880,25 +595,13 @@ export class EditProductScene {
           clearTimeout(existing.timer);
           existing.fileIds.push(fileId);
           existing.latestCtx = ctx;
-          existing.timer = setTimeout(
-            () => void this.flushExtraPhotosGroup(key),
-            800,
-          );
+          existing.timer = setTimeout(() => void this.flushExtraPhotosGroup(key), 800);
         } else {
-          const timer = setTimeout(
-            () => void this.flushExtraPhotosGroup(key),
-            800,
-          );
-          this.mediaGroupBuffers.set(key, {
-            fileIds: [fileId],
-            timer,
-            latestCtx: ctx,
-          });
+          const timer = setTimeout(() => void this.flushExtraPhotosGroup(key), 800);
+          this.mediaGroupBuffers.set(key, { fileIds: [fileId], timer, latestCtx: ctx });
         }
         return;
       }
-
-      // Одиночное фото
       await this.appendExtraPhotos(ctx, state, [fileId]);
     }
   }
@@ -907,28 +610,19 @@ export class EditProductScene {
     const buf = this.mediaGroupBuffers.get(key);
     if (!buf) return;
     this.mediaGroupBuffers.delete(key);
-
     const ctx = buf.latestCtx;
     const state = getState(ctx);
     if (state.editingField !== 'extra_photos') return;
-
     await this.appendExtraPhotos(ctx, state, buf.fileIds);
   }
 
-  private async appendExtraPhotos(
-    ctx: any,
-    state: EditState,
-    fileIds: string[],
-  ) {
+  private async appendExtraPhotos(ctx: any, state: EditState, fileIds: string[]) {
     const product = await this.productsService.findOne(state.productId);
     const alreadySaved = product?.extraPhotos?.length ?? 0;
-    const remaining =
-      MAX_EXTRA_PHOTOS - alreadySaved - state.newExtraPhotos.length;
+    const remaining = MAX_EXTRA_PHOTOS - alreadySaved - state.newExtraPhotos.length;
 
     if (remaining <= 0) {
-      await ctx.reply(
-        `Максимум ${MAX_EXTRA_PHOTOS} доп. фото достигнут. Нажмите "${DONE_TEXT}" для сохранения.`,
-      );
+      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} доп. фото достигнут. Нажмите "${DONE_TEXT}" для сохранения.`);
       return;
     }
 
@@ -938,90 +632,20 @@ export class EditProductScene {
 
     const skipped = fileIds.length - toAdd.length;
     let msg = `✅ Добавлено ${toAdd.length} фото (новых в очереди: ${state.newExtraPhotos.length}).`;
-    if (skipped > 0)
-      msg += ` Пропущено ${skipped} — лимит ${MAX_EXTRA_PHOTOS} шт.`;
+    if (skipped > 0) msg += ` Пропущено ${skipped} — лимит ${MAX_EXTRA_PHOTOS} шт.`;
     msg += ` Ещё или "${DONE_TEXT}".`;
     await ctx.reply(msg);
   }
 
   // ═══ Вспомогательные клавиатуры ════════════════════════════════════════════════
 
-  private async sendGenderKeyboard(ctx: any, selected?: string) {
-    const buttons = chunks(GENDERS, 2).map((row) =>
-      row.map((g) =>
-        Markup.button.callback(selected === g ? `✅ ${g}` : g, `egender:${g}`),
-      ),
-    );
+  private async sendSuitTypeKeyboard(ctx: any) {
+    const buttons = SUIT_TYPES.map((t, i) => [
+      Markup.button.callback(t, `etype:${i}`),
+    ]);
     buttons.push([Markup.button.callback('◀️ Назад', BACK_CB)]);
-    await ctx.reply('👤 Выберите новый пол:', {
+    await ctx.reply('👔 Выберите новый тип костюма:', {
       ...Markup.inlineKeyboard(buttons),
-    });
-  }
-
-  private async sendCategoryKeyboard(
-    ctx: any,
-    gender: string,
-    selected?: string,
-  ) {
-    const allowed = GENDER_CATEGORIES[gender] ?? Object.keys(CATEGORIES);
-    const buttons = chunks(allowed, 2).map((row) =>
-      row.map((cat) =>
-        Markup.button.callback(
-          selected === cat ? `✅ ${cat}` : cat,
-          `ecat:${cat}`,
-        ),
-      ),
-    );
-    buttons.push([Markup.button.callback('◀️ Назад', BACK_CB)]);
-    await ctx.reply('📂 Выберите новую категорию:', {
-      ...Markup.inlineKeyboard(buttons),
-    });
-  }
-
-  private async sendTypeKeyboard(
-    ctx: any,
-    category: string,
-    gender: string,
-    selected?: string,
-  ) {
-    const excluded = gender
-      ? (GENDER_TYPE_EXCLUSIONS[gender]?.[category] ?? [])
-      : [];
-    const types = (CATEGORIES[category] ?? []).filter(
-      (t) => !excluded.includes(t),
-    );
-    const buttons = chunks(types, 2).map((row) =>
-      row.map((t) =>
-        Markup.button.callback(selected === t ? `✅ ${t}` : t, `etype:${t}`),
-      ),
-    );
-    buttons.push([Markup.button.callback('◀️ Назад', BACK_CB)]);
-    await ctx.reply(`👔 Выберите тип в категории "${category}":`, {
-      ...Markup.inlineKeyboard(buttons),
-    });
-  }
-
-  private async sendCountryKeyboard(ctx: any, selected?: string) {
-    const ownBtn = Markup.button.callback(
-      selected === OWN_PRODUCTION
-        ? `✅ 🏭 ${OWN_PRODUCTION}`
-        : `🏭 ${OWN_PRODUCTION}`,
-      `ecountry:${OWN_PRODUCTION}`,
-    );
-    const countryButtons = chunks(COUNTRIES, 2).map((row) =>
-      row.map((c) =>
-        Markup.button.callback(selected === c ? `✅ ${c}` : c, `ecountry:${c}`),
-      ),
-    );
-    await ctx.reply('🌍 Выберите новую страну производства:', {
-      ...Markup.inlineKeyboard([
-        [ownBtn],
-        ...countryButtons,
-        [
-          Markup.button.callback('◀️ Назад', BACK_CB),
-          Markup.button.callback('✏️ Другое', E_COUNTRY_OTHER_CB),
-        ],
-      ]),
     });
   }
 }
