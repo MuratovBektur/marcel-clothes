@@ -126,13 +126,7 @@
 <script setup lang="ts">
 import { instagramLink, whatsappLink, telegramLink } from '~/constants/common'
 
-useSeoMeta({
-  title: () => 'Контакты — Marsel, мужские костюмы Алматы',
-  description: () =>
-    'Контакты магазина мужских костюмов Marsel. Адрес, телефон, режим работы. Запись на примерку и персональную консультацию.',
-  ogTitle: () => 'Контакты — Marsel',
-  ogDescription: () => 'Свяжитесь с Marsel для консультации и примерки костюма.',
-});
+
 </script>
 
 <style lang="scss" scoped>

@@ -154,7 +154,6 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { producingStartedYear } from '~/constants/common';
 import ProductCardList from '~/components/MainPage/ProductCardList.vue';
 
 const gender   = ref('');
@@ -199,16 +198,6 @@ function onReset() {
   resetPage();
 }
 
-useSeoMeta({
-  title: () => 'MARSEL — Мужские костюмы · Алматы',
-  description: () =>
-    `Дом мужских костюмов Marsel. Премиальные ткани с ${producingStartedYear} года.`,
-  // description: () =>
-  //   `Дом мужских костюмов Marsel. Премиальные ткани, ручной пошив, индивидуальный крой с ${producingStartedYear} года.`,
-  ogTitle: () => 'MARSEL — Мужские костюмы',
-  ogDescription: () => `Премиальные ткани с ${producingStartedYear} года.`,
-  // ogDescription: () => `Премиальные ткани, ручной пошив, индивидуальный крой с ${producingStartedYear} года.`,
-});
 </script>
 
 <style lang="scss" scoped>

@@ -78,19 +78,6 @@
 </template>
 
 <script setup lang="ts">
-import { producingStartedYear } from '~/constants/common';
-useSeoMeta({
-  title: () => 'О нас — Marsel, Дом мужских костюмов',
-  description: () =>
-    `Marsel — Дом мужской одежды с ${producingStartedYear} года. Премиальные ткани.`,
-  // description: () =>
-    // `Marsel — Дом мужской одежды с ${producingStartedYear} года. Премиальные ткани,  индивидуальный крой.`,
-  ogTitle: () => 'О нас — Marsel',
-  ogDescription: () =>
-    `Marsel — Дом мужской одежды с ${producingStartedYear} года.`,
-  // ogDescription: () =>
-    // `Marsel — Дом мужской одежды с ${producingStartedYear} года.  индивидуальный крой.`,
-});
 </script>
 
 <style lang="scss" scoped>

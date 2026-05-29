@@ -127,9 +127,6 @@ const pageRange = computed(() => {
   return result;
 });
 
-useSeoMeta({
-  title: () => `${brandName.value} — Mir Kolgotok`,
-});
 </script>
 
 <style lang="scss" scoped>

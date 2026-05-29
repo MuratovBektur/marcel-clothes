@@ -58,14 +58,6 @@ const allPhotos = computed(() => {
 
 const notFound = computed(() => !product.value && !pending.value);
 
-useSeoMeta({
-  title: () => product.value ? `${product.value.type} — Mir Kolgotok` : 'Товар — Mir Kolgotok',
-});
-
-const runtimeConfig = useRuntimeConfig();
-useHead({
-  link: () => [{ rel: 'canonical', href: `${runtimeConfig.public.siteUrl}/product/${id}` }],
-});
 </script>
 
 <style lang="scss" scoped>

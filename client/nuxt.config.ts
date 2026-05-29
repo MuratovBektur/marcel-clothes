@@ -9,14 +9,6 @@ export default defineNuxtConfig({
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Jost:wght@300;400;500;600&display=swap' },
       ],
-      script: [
-        {
-          src: '/yandex.metrika.js',
-        },
-        {
-          src: '/google.analytics.js',
-        },
-      ],
     },
   },
   css: [
@@ -51,7 +43,6 @@ export default defineNuxtConfig({
     // То, что доступно и клиенту, и серверу
     public: {
       apiBase: '/api', // Для браузера запросы будут идти относительно домена
-      siteUrl: 'https://optom.store',
     },
   },
 });

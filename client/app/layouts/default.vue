@@ -2,20 +2,6 @@
 import Footer from '~/components/Footer.vue'
 import Header from '~/components/Header/index.vue'
 
-const route = useRoute()
-const BASE = 'https://optom.store'
-
-useHead({
-  link: [
-    {
-      rel: 'canonical',
-      href: computed(() => `${BASE}${route.path}`),
-    },
-  ],
-  meta: [
-    { name: 'robots', content: 'index, follow' },
-  ],
-})
 </script>
 
 <template>

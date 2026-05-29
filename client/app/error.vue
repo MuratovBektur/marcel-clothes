@@ -18,9 +18,6 @@
 <script setup lang="ts">
 defineProps<{ error: { statusCode: number; message: string } }>();
 
-useSeoMeta({
-  title: 'Страница не найдена',
-});
 </script>
 
 <style lang="scss">
