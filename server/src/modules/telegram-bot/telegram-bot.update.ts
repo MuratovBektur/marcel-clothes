@@ -65,7 +65,7 @@ export class TelegramBotUpdate implements OnModuleInit {
   async onContact(@Ctx() ctx: any) {
     const contact = ctx.message?.contact;
     if (!contact) return;
-    const authorized = this.authService.checkAndAuthorize(contact.phone_number, ctx.from.id);
+    const authorized = await this.authService.checkAndAuthorize(contact.phone_number, ctx.from.id);
     if (authorized) {
       await ctx.reply('✅ *Доступ разрешён!*\n\nВыберите действие:', {
         parse_mode: 'Markdown',

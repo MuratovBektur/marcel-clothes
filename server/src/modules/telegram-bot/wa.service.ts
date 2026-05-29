@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import makeWASocket, {
@@ -30,7 +30,7 @@ const silentLogger = {
 } as any;
 
 @Injectable()
-export class WaService implements OnModuleDestroy {
+export class WaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WaService.name);
   private readonly sockets = new Map<number, SocketEntry>();
 
@@ -38,6 +38,77 @@ export class WaService implements OnModuleDestroy {
     @InjectRepository(BotUserWaGroup)
     private readonly repo: Repository<BotUserWaGroup>,
   ) {}
+
+  async onModuleInit() {
+    const baseDir = path.join(process.cwd(), 'uploads', 'wa-sessions');
+    if (!fs.existsSync(baseDir)) return;
+
+    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+    const sessionDirs = entries
+      .filter((e) => e.isDirectory() && !isNaN(parseInt(e.name, 10)))
+      .map((e) => ({ telegramId: parseInt(e.name, 10), sessDir: path.join(baseDir, e.name) }));
+
+    if (!sessionDirs.length) return;
+
+    const { version } = await fetchLatestBaileysVersion();
+    await Promise.all(
+      sessionDirs.map(({ telegramId, sessDir }) =>
+        this.restoreExistingSession(telegramId, sessDir, version).catch((e) =>
+          this.logger.warn(`Failed to restore WA session for telegramId=${telegramId}: ${e}`),
+        ),
+      ),
+    );
+  }
+
+  private async restoreExistingSession(
+    telegramId: number,
+    sessDir: string,
+    version: any,
+  ): Promise<void> {
+    const createSocket = async (): Promise<void> => {
+      const { state, saveCreds } = await useMultiFileAuthState(sessDir);
+
+      const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: false,
+        logger: silentLogger,
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        mobile: false,
+      });
+
+      this.sockets.set(telegramId, { sock, ready: false });
+      sock.ev.on('creds.update', saveCreds);
+
+      sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+        if (connection === 'open') {
+          const e = this.sockets.get(telegramId);
+          if (e) e.ready = true;
+          this.logger.log(`WA session restored for telegramId=${telegramId}`);
+          return;
+        }
+        if (connection === 'close') {
+          const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+          this.logger.warn(`WA session disconnected for telegramId=${telegramId}, code=${statusCode}`);
+
+          if (statusCode === DisconnectReason.loggedOut || statusCode === (DisconnectReason as any).badSession) {
+            // Session revoked — clean up
+            this.sockets.delete(telegramId);
+            if (fs.existsSync(sessDir)) {
+              fs.rmSync(sessDir, { recursive: true, force: true });
+            }
+          } else if (statusCode === DisconnectReason.restartRequired) {
+            await createSocket();
+          } else {
+            // Temporary network issue — reconnect after delay
+            setTimeout(() => createSocket().catch(() => this.sockets.delete(telegramId)), 5000);
+          }
+        }
+      });
+    };
+
+    await createSocket();
+  }
 
   async onModuleDestroy() {
     for (const [, entry] of this.sockets) {

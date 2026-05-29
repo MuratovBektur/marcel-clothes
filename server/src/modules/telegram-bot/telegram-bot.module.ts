@@ -14,6 +14,7 @@ import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import { BotUserGroup } from '../../entities/bot-user-group.entity';
 import { BotUserWaGroup } from '../../entities/bot-user-wa-group.entity';
+import { BotAuthorizedUser } from '../../entities/bot-authorized-user.entity';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -27,7 +28,7 @@ if (!TELEGRAM_BOT_TOKEN) {
       token: TELEGRAM_BOT_TOKEN,
       middlewares: [session()],
     }),
-    TypeOrmModule.forFeature([BotUserGroup, BotUserWaGroup]),
+    TypeOrmModule.forFeature([BotUserGroup, BotUserWaGroup, BotAuthorizedUser]),
     ProductsModule,
     HttpModule,
   ],
