@@ -28,6 +28,8 @@ const PRICE_RE = /^\d+(\.\d+)?\s+(сом|рубль|доллар)$/i;
 const BACK_CB = 'wiz_back';
 const DONE_CB = 'wiz_done';
 const CANCEL_CB = 'wiz_cancel';
+const CANCEL_CONFIRM_CB = 'wiz_cancel_confirm';
+const CANCEL_ABORT_CB = 'wiz_cancel_abort';
 const MAT_CUSTOM_CB = 'mat_custom';
 const COL_CUSTOM_CB = 'col_custom';
 const SIZE_CUSTOM_CB = 'size_custom';
@@ -36,6 +38,7 @@ const SIZE_CUSTOM_CB = 'size_custom';
 const BACK_TEXT = '◀️ Назад';
 const DONE_TEXT = '✅ Готово';
 const SKIP_TEXT = '⏭ Пропустить';
+const CANCEL_TEXT = '❌ Отмена';
 
 // ─── Cursor → шаг ─────────────────────────────────────────────────────────────
 // 0  = Тип           (inline, callback type:0..4)
@@ -102,10 +105,28 @@ export class ClothingWizard {
 
   @Action(CANCEL_CB)
   async onCancel(@Ctx() ctx: any) {
+    await ctx.answerCbQuery();
+    if (ctx.wizard.cursor === 0) {
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+      await ctx.reply('Добавление товара отменено.', { reply_markup: MAIN_KEYBOARD });
+      await ctx.scene.leave();
+    } else {
+      await sendCancelConfirmation(ctx);
+    }
+  }
+
+  @Action(CANCEL_CONFIRM_CB)
+  async onCancelConfirm(@Ctx() ctx: any) {
     await ctx.answerCbQuery('❌ Отменено');
     await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
     await ctx.reply('Добавление товара отменено.', { reply_markup: MAIN_KEYBOARD });
     await ctx.scene.leave();
+  }
+
+  @Action(CANCEL_ABORT_CB)
+  async onCancelAbort(@Ctx() ctx: any) {
+    await ctx.answerCbQuery('▶️ Продолжаем');
+    await ctx.deleteMessage();
   }
 
   // cursor 0 — Тип костюма (callback_data = type:<index>)
@@ -224,7 +245,7 @@ export class ClothingWizard {
     state.customStepMessageId = ctx.callbackQuery.message.message_id;
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты материалов через запятую:', {
-      ...Markup.keyboard([[BACK_TEXT]]).resize(),
+      ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize(),
     });
   }
 
@@ -236,7 +257,7 @@ export class ClothingWizard {
     state.customStepMessageId = ctx.callbackQuery.message.message_id;
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты цветов через запятую:', {
-      ...Markup.keyboard([[BACK_TEXT]]).resize(),
+      ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize(),
     });
   }
 
@@ -248,7 +269,7 @@ export class ClothingWizard {
     state.customStepMessageId = ctx.callbackQuery.message.message_id;
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты размеров через запятую:', {
-      ...Markup.keyboard([[BACK_TEXT]]).resize(),
+      ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize(),
     });
   }
 
@@ -256,6 +277,11 @@ export class ClothingWizard {
   @WizardStep(1)
   async onPriceStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
+
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
 
     if (msg?.text === BACK_TEXT) {
       ctx.wizard.cursor = 0;
@@ -285,6 +311,10 @@ export class ClothingWizard {
   async onStep2(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
     if (!state.waitingForCustom) return;
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
     if (msg?.text === BACK_TEXT) {
       state.waitingForCustom = null;
       state.customStepMessageId = null;
@@ -312,6 +342,10 @@ export class ClothingWizard {
   async onStep3(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
     if (!state.waitingForCustom) return;
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
     if (msg?.text === BACK_TEXT) {
       state.waitingForCustom = null;
       state.customStepMessageId = null;
@@ -339,6 +373,10 @@ export class ClothingWizard {
   async onStep4(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
     if (!state.waitingForCustom) return;
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
     if (msg?.text === BACK_TEXT) {
       state.waitingForCustom = null;
       state.customStepMessageId = null;
@@ -365,6 +403,11 @@ export class ClothingWizard {
   @WizardStep(5)
   async onMainPhotoStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
+
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
 
     if (msg?.text === BACK_TEXT) {
       state.mainPhoto = null;
@@ -394,6 +437,11 @@ export class ClothingWizard {
   async onDescriptionStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
 
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
+
     if (msg?.text === BACK_TEXT) {
       state.submission.description = undefined;
       ctx.wizard.cursor = 5;
@@ -421,6 +469,11 @@ export class ClothingWizard {
   @WizardStep(7)
   async onExtraPhotosStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
+
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
 
     if (msg?.text === BACK_TEXT) {
       state.mainPhoto = null;
@@ -551,6 +604,7 @@ function multiSelectMarkup(
     Markup.button.callback('✅ Готово', DONE_CB),
   ];
   rows.push(bottomRow);
+  rows.push([Markup.button.callback('❌ Отмена', CANCEL_CB)]);
   return Markup.inlineKeyboard(rows);
 }
 
@@ -574,7 +628,7 @@ async function sendPricePrompt(ctx: any) {
   await ctx.reply(
     '💰 *Шаг 2 из 8* — Введите цену и валюту через пробел:\n\n' +
       '_Примеры: 500 сом · 1200 рубль · 15 доллар_',
-    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT]]).resize() },
+    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize() },
   );
 }
 
@@ -602,21 +656,36 @@ async function sendSizesKeyboard(ctx: any, selected: string[]) {
 async function sendMainPhotoPrompt(ctx: any) {
   await ctx.reply(
     '📸 *Шаг 6 из 8* — Отправьте главное фото товара:\n_Одно фото_',
-    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT, DONE_TEXT]]).resize() },
+    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize() },
   );
 }
 
 async function sendDescriptionPrompt(ctx: any) {
   await ctx.reply('📝 *Шаг 7 из 8* — Описание товара:\n_Необязательно_', {
     parse_mode: 'Markdown',
-    ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT]]).resize(),
+    ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT], [CANCEL_TEXT]]).resize(),
   });
 }
 
 async function sendExtraPhotosPrompt(ctx: any) {
   await ctx.reply(
     `📷 *Шаг 8 из 8* — Дополнительные фото (до ${MAX_EXTRA_PHOTOS}):\n_Необязательно_`,
-    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT, DONE_TEXT]]).resize() },
+    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize() },
+  );
+}
+
+async function sendCancelConfirmation(ctx: any) {
+  await ctx.reply(
+    '⚠️ *Вы уверены, что хотите отменить?*\n\nВсе введённые данные будут потеряны.',
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('✅ Да, отменить', CANCEL_CONFIRM_CB),
+          Markup.button.callback('🔙 Нет, продолжить', CANCEL_ABORT_CB),
+        ],
+      ]),
+    },
   );
 }
 
