@@ -46,49 +46,39 @@
     <ClientOnly>
       <div class="product-info__cart-wrap">
 
-        <!-- Уже добавленные варианты (видны в обоих состояниях) -->
-        <TransitionGroup
-          v-if="productItems.length"
-          name="pi-variant"
-          tag="div"
-          class="product-info__added"
-        >
-          <div
-            v-for="item in productItems"
-            :key="`${item.color}_${item.size}`"
-            class="product-info__added-row"
+        <!-- ── Только одна комбинация — пикер не нужен ──────────────────── -->
+        <template v-if="onlyOneCombo">
+          <!-- Список (qty контрол) если уже в корзине -->
+          <TransitionGroup
+            v-if="productItems.length"
+            name="pi-variant"
+            tag="div"
+            class="product-info__added"
           >
-            <div class="product-info__added-info">
-              <span class="product-info__added-tag">{{ item.color }}</span>
-              <span class="product-info__added-sep">/</span>
-              <span class="product-info__added-tag product-info__added-tag--size">{{ item.size }}</span>
+            <div
+              v-for="item in productItems"
+              :key="`${item.color}_${item.size}`"
+              class="product-info__added-row"
+            >
+              <div class="product-info__added-info">
+                <span class="product-info__added-tag">{{ item.color }}</span>
+                <span class="product-info__added-sep">/</span>
+                <span class="product-info__added-tag product-info__added-tag--size">{{ item.size }}</span>
+              </div>
+              <div class="product-info__added-qty">
+                <button class="product-info__added-btn" @click="decrement(product.id, item.color, item.size)" aria-label="−">−</button>
+                <span class="product-info__added-num">{{ item.qty }}</span>
+                <button class="product-info__added-btn" @click="increment(product.id, item.color, item.size)" aria-label="+">+</button>
+              </div>
             </div>
-            <div class="product-info__added-qty">
-              <button class="product-info__added-btn" @click="decrement(product.id, item.color, item.size)" aria-label="−">−</button>
-              <span class="product-info__added-num">{{ item.qty }}</span>
-              <button class="product-info__added-btn" @click="increment(product.id, item.color, item.size)" aria-label="+">+</button>
-            </div>
-          </div>
-        </TransitionGroup>
-
-        <!-- Picker mode -->
-        <template v-if="showPicker">
-          <VariantPicker
-            ref="pickerRef"
-            :colors="product.colors"
-            :sizes="product.sizes"
-            :already-added="productItems"
-            @update:variants="onVariantsUpdate"
-          />
+          </TransitionGroup>
 
           <div class="product-info__actions">
             <button
+              v-if="!allCombosTaken"
               class="product-info__cart-btn"
-              :class="{ 'product-info__cart-btn--disabled': !pendingVariants.length }"
-              :disabled="!pendingVariants.length"
-              @click="addToCart"
+              @click="addSingleCombo"
             >В корзину</button>
-
             <NuxtLink
               v-if="productItems.length"
               to="/cart"
@@ -100,23 +90,80 @@
           </div>
         </template>
 
-        <!-- После добавления -->
+        <!-- ── Несколько комбинаций — полный пикер ──────────────────────── -->
         <template v-else>
-          <div class="product-info__actions">
-            <button
-              v-if="!allCombosTaken"
-              class="product-info__cart-btn product-info__cart-btn--more"
-              @click="showPicker = true"
-            >+ Выбрать ещё</button>
-
-            <NuxtLink
-              to="/cart"
-              class="product-info__cart-btn product-info__cart-btn--in"
+          <!-- Уже добавленные варианты (видны в обоих состояниях) -->
+          <TransitionGroup
+            v-if="productItems.length"
+            name="pi-variant"
+            tag="div"
+            class="product-info__added"
+          >
+            <div
+              v-for="item in productItems"
+              :key="`${item.color}_${item.size}`"
+              class="product-info__added-row"
             >
-              <span class="product-info__cart-arrow">→</span>
-              Перейти в корзину
-            </NuxtLink>
-          </div>
+              <div class="product-info__added-info">
+                <span class="product-info__added-tag">{{ item.color }}</span>
+                <span class="product-info__added-sep">/</span>
+                <span class="product-info__added-tag product-info__added-tag--size">{{ item.size }}</span>
+              </div>
+              <div class="product-info__added-qty">
+                <button class="product-info__added-btn" @click="decrement(product.id, item.color, item.size)" aria-label="−">−</button>
+                <span class="product-info__added-num">{{ item.qty }}</span>
+                <button class="product-info__added-btn" @click="increment(product.id, item.color, item.size)" aria-label="+">+</button>
+              </div>
+            </div>
+          </TransitionGroup>
+
+          <!-- Picker mode -->
+          <template v-if="showPicker">
+            <VariantPicker
+              ref="pickerRef"
+              :colors="product.colors"
+              :sizes="product.sizes"
+              :already-added="productItems"
+              @update:variants="onVariantsUpdate"
+            />
+
+            <div class="product-info__actions">
+              <button
+                class="product-info__cart-btn"
+                :class="{ 'product-info__cart-btn--disabled': !pendingVariants.length }"
+                :disabled="!pendingVariants.length"
+                @click="addToCart"
+              >В корзину</button>
+
+              <NuxtLink
+                v-if="productItems.length"
+                to="/cart"
+                class="product-info__cart-btn product-info__cart-btn--in"
+              >
+                <span class="product-info__cart-arrow">→</span>
+                Перейти в корзину
+              </NuxtLink>
+            </div>
+          </template>
+
+          <!-- После добавления -->
+          <template v-else>
+            <div class="product-info__actions">
+              <button
+                v-if="!allCombosTaken"
+                class="product-info__cart-btn product-info__cart-btn--more"
+                @click="showPicker = true"
+              >+ Выбрать ещё</button>
+
+              <NuxtLink
+                to="/cart"
+                class="product-info__cart-btn product-info__cart-btn--in"
+              >
+                <span class="product-info__cart-arrow">→</span>
+                Перейти в корзину
+              </NuxtLink>
+            </div>
+          </template>
         </template>
 
       </div>
@@ -148,6 +195,11 @@ const allCombosTaken = computed(() => {
   return taken.size >= props.product.colors.length * props.product.sizes.length
 })
 
+// Только одна возможная комбинация — пикер не нужен
+const onlyOneCombo = computed(
+  () => props.product.colors.length === 1 && props.product.sizes.length === 1
+)
+
 const showPicker      = ref(true)
 const pendingVariants = ref<VariantEntry[]>([])
 const pickerRef       = ref<InstanceType<typeof VariantPicker> | null>(null)
@@ -159,7 +211,6 @@ function onVariantsUpdate(variants: VariantEntry[]) {
 function addToCart() {
   if (!pendingVariants.value.length) return
   for (const v of pendingVariants.value) {
-    // add() always sets qty=1; call it once then increment for the rest
     add({
       productId:   props.product.id,
       productType: props.product.type,
@@ -174,6 +225,17 @@ function addToCart() {
   }
   pickerRef.value?.reset()
   showPicker.value = false
+}
+
+function addSingleCombo() {
+  add({
+    productId:   props.product.id,
+    productType: props.product.type,
+    price:       props.product.price,
+    photo:       props.product.photos[0] ?? '',
+    color:       props.product.colors[0] ?? '',
+    size:        props.product.sizes[0]  ?? '',
+  })
 }
 </script>
 
