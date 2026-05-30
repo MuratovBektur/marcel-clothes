@@ -13,6 +13,7 @@ import {
 import { OnModuleInit } from '@nestjs/common';
 import { Context, Markup, Telegraf } from 'telegraf';
 import { ProductsService } from '../products/products.service';
+import { OrdersService } from '../orders/orders.service';
 import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
@@ -24,6 +25,7 @@ export class TelegramBotUpdate implements OnModuleInit {
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
     private readonly productsService: ProductsService,
+    private readonly ordersService: OrdersService,
     private readonly authService: AuthService,
     private readonly groupService: GroupService,
     private readonly tgGroupService: TgGroupService,
@@ -90,6 +92,12 @@ export class TelegramBotUpdate implements OnModuleInit {
   async onListButton(@Ctx() ctx: any) {
     if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
     return this.onList(ctx);
+  }
+
+  @Hears('📦 Список заказов')
+  async onOrdersButton(@Ctx() ctx: any) {
+    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
+    await this.renderOrderCard(ctx, 0, false);
   }
 
   @Hears('⚙️ Настройки')
@@ -391,6 +399,133 @@ export class TelegramBotUpdate implements OnModuleInit {
     }
   }
 
+  // ─── Заказы: навигация ────────────────────────────────────────────────────────
+  @Action(/^order_nav:(\d+)/)
+  async onOrderNav(@Ctx() ctx: any) {
+    const offset = parseInt((ctx.callbackQuery.data as string).replace('order_nav:', ''), 10);
+    await ctx.answerCbQuery();
+    await this.renderOrderCard(ctx, offset, true);
+  }
+
+  @Action(/^order_items:([^:]+):(\d+)/)
+  async onOrderItems(@Ctx() ctx: any) {
+    const [, orderId, idxStr] =
+      /^order_items:([^:]+):(\d+)$/.exec(ctx.callbackQuery.data as string) ?? [];
+    const idx = parseInt(idxStr, 10);
+    await ctx.answerCbQuery();
+    await this.renderOrderItemPhoto(ctx, orderId, idx, false);
+  }
+
+  @Action(/^oitem_nav:([^:]+):(\d+)/)
+  async onOrderItemNav(@Ctx() ctx: any) {
+    const [, orderId, idxStr] =
+      /^oitem_nav:([^:]+):(\d+)$/.exec(ctx.callbackQuery.data as string) ?? [];
+    const idx = parseInt(idxStr, 10);
+    await ctx.answerCbQuery();
+    await this.renderOrderItemPhoto(ctx, orderId, idx, true);
+  }
+
+  @Action(/^oitem_close:(.+)/)
+  async onOrderItemClose(@Ctx() ctx: any) {
+    await ctx.answerCbQuery();
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+  }
+
+  // ─── Вспомогательный метод: карточка заказа ──────────────────────────────────
+  private async renderOrderCard(ctx: any, offset: number, edit: boolean) {
+    const { data, total } = await this.ordersService.findAll(offset + 1, 1);
+
+    if (total === 0) {
+      const msg = '📦 Заказов пока нет.';
+      if (edit) {
+        await ctx.editMessageText(msg, { ...Markup.inlineKeyboard([]) });
+      } else {
+        await ctx.reply(msg, { reply_markup: MAIN_KEYBOARD });
+      }
+      return;
+    }
+
+    const o = data[0];
+    const date = o.createdAt.toLocaleDateString('ru-RU', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+    const itemLines = o.items
+      .map((it) => `• ${it.productType} × ${it.qty}`)
+      .join('\n');
+
+    const text =
+      `📦 *Заказ #${o.id.slice(0, 8)}*\n` +
+      `📅 *Дата:* ${date}\n` +
+      `💰 *Сумма:* ${o.total}\n` +
+      `👤 *Клиент:* ${o.customerName}\n` +
+      `📞 *Телефон:* ${o.customerPhone}\n\n` +
+      `🛍 *Товары:*\n${itemLines}`;
+
+    const navRow: ReturnType<typeof Markup.button.callback>[] = [];
+    if (offset > 0) navRow.push(Markup.button.callback('◀️', `order_nav:${offset - 1}`));
+    navRow.push(Markup.button.callback(`${offset + 1} / ${total}`, 'orders_noop'));
+    if (offset < total - 1) navRow.push(Markup.button.callback('▶️', `order_nav:${offset + 1}`));
+
+    const keyboard = Markup.inlineKeyboard([
+      navRow,
+      [Markup.button.callback('🖼 Посмотреть товары', `order_items:${o.id}:0`)],
+    ]);
+
+    if (edit) {
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    } else {
+      await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+  }
+
+  // ─── Вспомогательный метод: фото товара из заказа ────────────────────────────
+  private async renderOrderItemPhoto(ctx: any, orderId: string, idx: number, edit: boolean) {
+    const order = await this.ordersService.findOne(orderId);
+    if (!order) { await ctx.reply('Заказ не найден.'); return; }
+
+    const items = order.items;
+    const item = items[idx];
+    if (!item) return;
+
+    const caption =
+      `🖼 *${item.productType}*\n` +
+      `💰 ${item.price}  ×  ${item.qty} шт.\n\n` +
+      `${idx + 1} из ${items.length}`;
+
+    const navRow: ReturnType<typeof Markup.button.callback>[] = [];
+    if (idx > 0) navRow.push(Markup.button.callback('◀️', `oitem_nav:${orderId}:${idx - 1}`));
+    if (idx < items.length - 1) navRow.push(Markup.button.callback('▶️', `oitem_nav:${orderId}:${idx + 1}`));
+
+    const keyboard = Markup.inlineKeyboard([
+      navRow,
+      [Markup.button.callback('✖ Закрыть', `oitem_close:${orderId}`)],
+    ]);
+
+    const photoPath = path.join(process.cwd(), item.photo.replace(/^\//, ''));
+
+    if (edit) {
+      try {
+        await ctx.editMessageMedia(
+          { type: 'photo', media: { source: fs.createReadStream(photoPath) }, caption, parse_mode: 'Markdown' },
+          keyboard,
+        );
+      } catch {
+        await ctx.replyWithPhoto(
+          { source: fs.createReadStream(photoPath) },
+          { caption, parse_mode: 'Markdown', ...keyboard },
+        );
+      }
+    } else {
+      await ctx.replyWithPhoto(
+        { source: fs.createReadStream(photoPath) },
+        { caption, parse_mode: 'Markdown', ...keyboard },
+      );
+    }
+  }
+
+  @Action('orders_noop')
+  async onOrdersNoop(@Ctx() ctx: any) { await ctx.answerCbQuery(); }
+
   private async requestAuth(ctx: any) {
     await ctx.reply('🔒 Сначала пройдите идентификацию. Нажмите /start');
   }
@@ -532,7 +667,7 @@ export class TelegramBotUpdate implements OnModuleInit {
       `💰 *Цена:* ${p.price}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
-      (p.description ? `📝 *Описание:* ${p.description}\n` : '') +
+      (p.description ? `📝 *Описание:* ${this.truncDesc(p.description)}\n` : '') +
       `📷 *Доп. фото:* ${p.extraPhotos?.length ?? 0}\n🆔 ID: \`${p.id}\``;
     await ctx.editMessageCaption(caption, {
       parse_mode: 'Markdown',
@@ -607,6 +742,11 @@ export class TelegramBotUpdate implements OnModuleInit {
 
   // ═══ Вспомогательные ═══════════════════════════════════════════════════════════
 
+  private truncDesc(desc: string | null, max = 300): string {
+    if (!desc) return '';
+    return desc.length <= max ? desc : desc.slice(0, max) + '…';
+  }
+
   private settingsMainKeyboard() {
     return Markup.inlineKeyboard([
       [Markup.button.callback('📢 Публикация', 'stg:pub')],
@@ -633,7 +773,7 @@ export class TelegramBotUpdate implements OnModuleInit {
       `💰 *Цена:* ${p.price}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
-      (p.description ? `📝 *Описание:* ${p.description}\n` : '') +
+      (p.description ? `📝 *Описание:* ${this.truncDesc(p.description)}\n` : '') +
       `📷 *Доп. фото:* ${p.extraPhotos?.length ?? 0} шт.\n🆔 \`${p.id}\``;
 
     const navRow: ReturnType<typeof Markup.button.callback>[] = [];

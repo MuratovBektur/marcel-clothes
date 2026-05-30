@@ -24,7 +24,7 @@
         <SearchBar />
       </div>
 
-      <!-- Desktop: favourites -->
+      <!-- Desktop: favourites + cart -->
       <ClientOnly>
         <NuxtLink v-if="isFavsHydrated" to="/favourites" class="header__fav header__fav--desktop"
           :class="{ 'header__fav--has': favCount > 0 }">
@@ -33,6 +33,15 @@
           <span v-if="favCount > 0" class="header__fav-badge">{{ favCount }}</span>
         </NuxtLink>
         <div v-else class="header__fav-placeholder" aria-hidden="true" />
+      </ClientOnly>
+      <ClientOnly>
+        <NuxtLink v-if="isCartHydrated" to="/cart" class="header__cart header__cart--desktop"
+          :class="{ 'header__cart--has': cartCount > 0 }">
+          <span class="header__cart-icon">⊙</span>
+          <span class="header__cart-label">Корзина</span>
+          <span v-if="cartCount > 0" class="header__cart-badge">{{ cartCount }}</span>
+        </NuxtLink>
+        <div v-else class="header__cart-placeholder" aria-hidden="true" />
       </ClientOnly>
 
       <!-- Mobile: icons + burger -->
@@ -43,6 +52,15 @@
               :class="{ 'header__mobile-fav--has': favCount > 0 }" aria-label="Избранное">
               {{ favCount > 0 ? '♥' : '♡' }}
               <span v-if="favCount > 0" class="header__mobile-fav-badge">{{ favCount }}</span>
+            </NuxtLink>
+          </Transition>
+        </ClientOnly>
+        <ClientOnly>
+          <Transition name="fav-fade">
+            <NuxtLink v-if="isCartHydrated" to="/cart" class="header__mobile-cart"
+              :class="{ 'header__mobile-cart--has': cartCount > 0 }" aria-label="Корзина">
+              ⊙
+              <span v-if="cartCount > 0" class="header__mobile-cart-badge">{{ cartCount }}</span>
             </NuxtLink>
           </Transition>
         </ClientOnly>
@@ -105,6 +123,7 @@ function navigateToHome() {
 }
 
 const { count: favCount, isFavsHydrated } = useFavourites();
+const { count: cartCount, isCartHydrated } = useCart();
 </script>
 
 <style lang="scss" scoped>
@@ -323,6 +342,64 @@ $bp: 1200px;
   padding: 0 3px;
 }
 
+// ── Cart — desktop ──────────────────────────────────────
+
+.header__cart--desktop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  background: transparent;
+  color: $navy;
+  font-family: 'Jost', sans-serif;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+  text-decoration: none;
+  flex-shrink: 0;
+  border: 1.5px solid $cream-3;
+  transition: border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: $navy;
+  }
+
+  &.header__cart--has {
+    border-color: $navy;
+  }
+}
+
+.header__cart-placeholder {
+  width: 110px;
+  height: 42px;
+  flex-shrink: 0;
+}
+
+.header__cart-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.header__cart-label {
+  // label text
+}
+
+.header__cart-badge {
+  background: $gold;
+  color: $navy-3;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
 // ── Mobile group ────────────────────────────────────────
 
 .header__mobile-group {
@@ -352,6 +429,45 @@ $bp: 1200px;
 }
 
 .header__mobile-fav-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: $gold;
+  color: $navy-3;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  font-family: 'Jost', sans-serif;
+}
+
+// ── Mobile cart ─────────────────────────────────────────
+
+.header__mobile-cart {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  font-size: 18px;
+  color: $navy;
+  text-decoration: none;
+  border: 1px solid $cream-3;
+  transition: color 0.15s, border-color 0.15s;
+
+  &--has {
+    color: $navy;
+    border-color: $navy;
+  }
+}
+
+.header__mobile-cart-badge {
   position: absolute;
   top: -6px;
   right: -6px;
@@ -589,6 +705,14 @@ $bp: 1200px;
   }
 
   .header__fav-placeholder {
+    display: none;
+  }
+
+  .header__cart--desktop {
+    display: none;
+  }
+
+  .header__cart-placeholder {
     display: none;
   }
 

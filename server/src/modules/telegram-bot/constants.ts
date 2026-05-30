@@ -4,7 +4,7 @@ export const EDIT_SCENE_ID = 'edit-product-scene';
 export const MAIN_KEYBOARD = {
   keyboard: [
     [{ text: '➕ Добавить товар' }, { text: '📋 Список товаров' }],
-    [{ text: '⚙️ Настройки' }],
+    [{ text: '📦 Список заказов' }, { text: '⚙️ Настройки' }],
   ],
   resize_keyboard: true,
 };

@@ -7,6 +7,7 @@ import { ClothingWizard } from './clothing.wizard';
 import { EditProductScene } from './edit-product.scene';
 import { TelegramBotUpdate } from './telegram-bot.update';
 import { ProductsModule } from '../products/products.module';
+import { OrdersModule } from '../orders/orders.module';
 import { FileStorageService } from './file-storage.service';
 import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
@@ -30,6 +31,7 @@ if (!TELEGRAM_BOT_TOKEN) {
     }),
     TypeOrmModule.forFeature([BotUserGroup, BotUserWaGroup, BotAuthorizedUser]),
     ProductsModule,
+    OrdersModule,
     HttpModule,
   ],
   providers: [

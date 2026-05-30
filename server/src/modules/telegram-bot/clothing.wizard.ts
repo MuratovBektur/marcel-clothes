@@ -541,6 +541,10 @@ export class ClothingWizard {
       extraPhotos: extraPhotoUrls,
     });
 
+    const descPreview = s.description
+      ? (s.description.length > 300 ? s.description.slice(0, 300) + '…' : s.description)
+      : null;
+
     const caption =
       `✅ *Товар добавлен!*\n\n` +
       `👔 *Тип:* ${s.type}\n` +
@@ -548,7 +552,7 @@ export class ClothingWizard {
       `🧵 *Материалы:* ${s.materials?.join(', ')}\n` +
       `🎨 *Цвета:* ${s.colors?.join(', ')}\n` +
       `📏 *Размеры:* ${s.sizes?.join(', ')}\n` +
-      (s.description ? `📝 *Описание:* ${s.description}\n` : '') +
+      (descPreview ? `📝 *Описание:* ${descPreview}\n` : '') +
       `📷 *Доп. фото:* ${extraPhotoUrls.length}\n` +
       `🆔 ID: \`${saved.id}\``;
 
