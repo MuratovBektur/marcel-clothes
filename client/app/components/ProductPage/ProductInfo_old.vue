@@ -42,21 +42,130 @@
       </div>
     </div>
 
+    <!-- Cart section -->
     <ClientOnly>
-      <!-- Cart section -->
       <div class="product-info__cart-wrap">
-        <div class="product-info__actions">
-          <div v-if="cartItem" class="product-info__qty-solo">
-            <button class="product-info__added-btn" @click="decrement(product.id)" aria-label="−">−</button>
-            <span class="product-info__added-num">{{ cartItem.qty }}</span>
-            <button class="product-info__added-btn" @click="increment(product.id)" aria-label="+">+</button>
+
+        <!-- ── Только одна комбинация — пикер не нужен ──────────────────── -->
+        <template v-if="onlyOneCombo">
+          <!-- Список (qty контрол) если уже в корзине -->
+          <TransitionGroup
+            v-if="productItems.length"
+            name="pi-variant"
+            tag="div"
+            class="product-info__added"
+          >
+            <div
+              v-for="item in productItems"
+              :key="`${item.color}_${item.size}`"
+              class="product-info__added-row"
+            >
+              <div class="product-info__added-info">
+                <span class="product-info__added-tag">{{ item.color }}</span>
+                <span class="product-info__added-sep">/</span>
+                <span class="product-info__added-tag product-info__added-tag--size">{{ item.size }}</span>
+              </div>
+              <div class="product-info__added-qty">
+                <button class="product-info__added-btn" @click="decrement(product.id, item.color, item.size)" aria-label="−">−</button>
+                <span class="product-info__added-num">{{ item.qty }}</span>
+                <button class="product-info__added-btn" @click="increment(product.id, item.color, item.size)" aria-label="+">+</button>
+              </div>
+            </div>
+          </TransitionGroup>
+
+          <div class="product-info__actions">
+            <button
+              v-if="!allCombosTaken"
+              class="product-info__cart-btn"
+              @click="addSingleCombo"
+            >В корзину</button>
+            <NuxtLink
+              v-if="productItems.length"
+              to="/cart"
+              class="product-info__cart-btn product-info__cart-btn--in"
+            >
+              <span class="product-info__cart-arrow">→</span>
+              Перейти в корзину
+            </NuxtLink>
           </div>
-          <button v-else class="product-info__cart-btn" @click="addToCart">В корзину</button>
-          <NuxtLink v-if="cartItem" to="/cart" class="product-info__cart-btn product-info__cart-btn--in">
-            <span class="product-info__cart-arrow">→</span>
-            Перейти в корзину
-          </NuxtLink>
-        </div>
+        </template>
+
+        <!-- ── Несколько комбинаций — полный пикер ──────────────────────── -->
+        <template v-else>
+          <!-- Уже добавленные варианты (видны в обоих состояниях) -->
+          <TransitionGroup
+            v-if="productItems.length"
+            name="pi-variant"
+            tag="div"
+            class="product-info__added"
+          >
+            <div
+              v-for="item in productItems"
+              :key="`${item.color}_${item.size}`"
+              class="product-info__added-row"
+            >
+              <div class="product-info__added-info">
+                <span class="product-info__added-tag">{{ item.color }}</span>
+                <span class="product-info__added-sep">/</span>
+                <span class="product-info__added-tag product-info__added-tag--size">{{ item.size }}</span>
+              </div>
+              <div class="product-info__added-qty">
+                <button class="product-info__added-btn" @click="decrement(product.id, item.color, item.size)" aria-label="−">−</button>
+                <span class="product-info__added-num">{{ item.qty }}</span>
+                <button class="product-info__added-btn" @click="increment(product.id, item.color, item.size)" aria-label="+">+</button>
+              </div>
+            </div>
+          </TransitionGroup>
+
+          <!-- Picker mode -->
+          <template v-if="showPicker">
+            <VariantPicker
+              ref="pickerRef"
+              :colors="product.colors"
+              :sizes="product.sizes"
+              :already-added="productItems"
+              @update:variants="onVariantsUpdate"
+            />
+
+            <div class="product-info__actions">
+              <button
+                class="product-info__cart-btn"
+                :class="{ 'product-info__cart-btn--disabled': !pendingVariants.length }"
+                :disabled="!pendingVariants.length"
+                @click="addToCart"
+              >В корзину</button>
+
+              <NuxtLink
+                v-if="productItems.length"
+                to="/cart"
+                class="product-info__cart-btn product-info__cart-btn--in"
+              >
+                <span class="product-info__cart-arrow">→</span>
+                Перейти в корзину
+              </NuxtLink>
+            </div>
+          </template>
+
+          <!-- После добавления -->
+          <template v-else>
+            <div class="product-info__actions">
+              <button
+                v-if="!allCombosTaken"
+                class="product-info__cart-btn product-info__cart-btn--more"
+                @click="showPicker = true"
+              >+ Выбрать ещё</button>
+
+              <NuxtLink
+                to="/cart"
+                class="product-info__cart-btn product-info__cart-btn--in"
+              >
+                <span class="product-info__cart-arrow">→</span>
+                Перейти в корзину
+              </NuxtLink>
+            </div>
+          </template>
+        </template>
+
       </div>
 
       <!-- Social links -->
@@ -70,22 +179,62 @@
 </template>
 
 <script setup lang="ts">
+import VariantPicker from './VariantPicker.vue'
+import type { VariantEntry } from './VariantPicker.vue'
 import type { Product } from '~/composables/useProducts'
 import { instagramLink, whatsappLink, telegramLink } from '~/constants/common'
 
 const props = defineProps<{ product: Product }>()
 
 const { add, increment, decrement, getProductItems } = useCart()
-const cartItem = computed(() => getProductItems(props.product.id)[0] ?? null)
+
+const productItems    = computed(() => getProductItems(props.product.id))
+
+const allCombosTaken = computed(() => {
+  const taken = new Set(productItems.value.map((i: { color: string; size: string }) => `${i.color}__${i.size}`))
+  return taken.size >= props.product.colors.length * props.product.sizes.length
+})
+
+// Только одна возможная комбинация — пикер не нужен
+const onlyOneCombo = computed(
+  () => props.product.colors.length === 1 && props.product.sizes.length === 1
+)
+
+const showPicker      = ref(true)
+const pendingVariants = ref<VariantEntry[]>([])
+const pickerRef       = ref<InstanceType<typeof VariantPicker> | null>(null)
+
+function onVariantsUpdate(variants: VariantEntry[]) {
+  pendingVariants.value = variants
+}
 
 function addToCart() {
+  if (!pendingVariants.value.length) return
+  for (const v of pendingVariants.value) {
+    add({
+      productId:   props.product.id,
+      productType: props.product.type,
+      price:       props.product.price,
+      photo:       props.product.photos[0] ?? '',
+      color:       v.color,
+      size:        v.size,
+    })
+    for (let i = 1; i < v.qty; i++) {
+      increment(props.product.id, v.color, v.size)
+    }
+  }
+  pickerRef.value?.reset()
+  showPicker.value = false
+}
+
+function addSingleCombo() {
   add({
     productId:   props.product.id,
     productType: props.product.type,
     price:       props.product.price,
     photo:       props.product.photos[0] ?? '',
-    color:       '',
-    size:        '',
+    color:       props.product.colors[0] ?? '',
+    size:        props.product.sizes[0]  ?? '',
   })
 }
 </script>
@@ -230,13 +379,6 @@ function addToCart() {
   // ── Actions ────────────────────────────────────────────────
 
   &__actions { display: flex; flex-direction: column; gap: 8px; }
-
-  &__qty-solo {
-    display: flex;
-    align-items: center;
-    border: 1px solid #e0e0e0;
-    align-self: flex-start;
-  }
 
   &__cart-btn {
     display: inline-flex; align-items: center; gap: 12px; width: 100%;
