@@ -1,10 +1,19 @@
 export const CLOTHING_WIZARD_ID = 'clothing-wizard';
 export const EDIT_SCENE_ID = 'edit-product-scene';
 
+export const MENU_ITEMS = [
+  { command: 'add',      description: '➕ Добавить товар',  text: '➕ Добавить товар' },
+  { command: 'list',     description: '📋 Список товаров',  text: '📋 Список товаров' },
+  { command: 'orders',   description: '📦 Список заказов',  text: '📦 Список заказов' },
+  { command: 'settings', description: '⚙️ Настройки',       text: '⚙️ Настройки' },
+] as const;
+
+export const BOT_COMMANDS = MENU_ITEMS.map(({ command, description }) => ({ command, description }));
+
 export const MAIN_KEYBOARD = {
   keyboard: [
-    [{ text: '➕ Добавить товар' }, { text: '📋 Список товаров' }],
-    [{ text: '📦 Список заказов' }, { text: '⚙️ Настройки' }],
+    [{ text: MENU_ITEMS[0].text }, { text: MENU_ITEMS[1].text }],
+    [{ text: MENU_ITEMS[2].text }, { text: MENU_ITEMS[3].text }],
   ],
   resize_keyboard: true,
 };

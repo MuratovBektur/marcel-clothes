@@ -18,7 +18,7 @@ import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
-import { CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
+import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
 
 @Update()
 export class TelegramBotUpdate implements OnModuleInit {
@@ -34,10 +34,7 @@ export class TelegramBotUpdate implements OnModuleInit {
 
   async onModuleInit() {
     await this.bot.telegram.deleteMyCommands({});
-    await this.bot.telegram.setMyCommands([
-      { command: 'add', description: '➕ Добавить товар' },
-      { command: 'list', description: '📋 Список товаров' },
-    ]);
+    await this.bot.telegram.setMyCommands(BOT_COMMANDS);
   }
 
   // ─── Старт ────────────────────────────────────────────────────────────────────
@@ -374,12 +371,47 @@ export class TelegramBotUpdate implements OnModuleInit {
     );
   }
 
+  // ─── Команды ──────────────────────────────────────────────────────────────────
+  @Command('add')
+  async onAdd(@Ctx() ctx: any) {
+    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
+    try {
+      if (!ctx.scene) { await ctx.reply('Ошибка: сцена не инициализирована.'); return; }
+      await ctx.scene.enter(CLOTHING_WIZARD_ID);
+    } catch (e) {
+      console.error('[Bot] Error entering scene:', e);
+      await ctx.reply('Ошибка: ' + (e as Error).message);
+    }
+  }
+
+  @Command('list')
+  async onList(@Ctx() ctx: any) {
+    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
+    await this.renderCard(ctx, 0, false);
+  }
+
+  @Command('orders')
+  async onOrdersCommand(@Ctx() ctx: any) {
+    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
+    await this.renderOrderCard(ctx, 0, false);
+  }
+
+  @Command('settings')
+  async onSettingsCommand(@Ctx() ctx: any) {
+    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
+    await ctx.reply('⚙️ *Настройки*', {
+      parse_mode: 'Markdown',
+      ...this.settingsMainKeyboard(),
+    });
+  }
+
   // ─── Ввод юзернейма TG-группы и номера WA ────────────────────────────────────
   @On('text')
   async onText(@Ctx() ctx: any) {
     if (ctx.scene?.current) return;
 
     const text: string = ctx.message?.text ?? '';
+    if (text.startsWith('/')) return;
 
     // ── Ввод номера телефона для доступа к боту ──────────────────────────────
     if (ctx.session?.awaitingAccessPhone) {
@@ -626,25 +658,6 @@ export class TelegramBotUpdate implements OnModuleInit {
 
   private async requestAuth(ctx: any) {
     await ctx.reply('🔒 Сначала пройдите идентификацию. Нажмите /start');
-  }
-
-  // ─── Команды ──────────────────────────────────────────────────────────────────
-  @Command('add')
-  async onAdd(@Ctx() ctx: any) {
-    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
-    try {
-      if (!ctx.scene) { await ctx.reply('Ошибка: сцена не инициализирована.'); return; }
-      await ctx.scene.enter(CLOTHING_WIZARD_ID);
-    } catch (e) {
-      console.error('[Bot] Error entering scene:', e);
-      await ctx.reply('Ошибка: ' + (e as Error).message);
-    }
-  }
-
-  @Command('list')
-  async onList(@Ctx() ctx: any) {
-    if (!this.authService.isAuthorized(ctx.from.id)) return this.requestAuth(ctx);
-    await this.renderCard(ctx, 0, false);
   }
 
   // ─── Карточки: навигация и действия ──────────────────────────────────────────
