@@ -58,6 +58,32 @@ const allPhotos = computed(() => {
 
 const notFound = computed(() => !product.value && !pending.value);
 
+useSeoMeta({
+  title: computed(() => product.value
+    ? `${product.value.type}${product.value.brand ? ' ' + product.value.brand : ''}`
+    : 'Товар'),
+  description: computed(() => {
+    if (!product.value) return '';
+    const parts = [product.value.type, product.value.gender, product.value.category, product.value.price].filter(Boolean);
+    const base = `${parts.join(' · ')} — купить в Marsel, Дордой, Бишкек.`;
+    return product.value.description
+      ? `${product.value.description} ${base}`
+      : base;
+  }),
+  ogTitle: computed(() => product.value
+    ? `${product.value.type}${product.value.brand ? ' ' + product.value.brand : ''} — Marsel`
+    : 'Marsel'),
+  ogDescription: computed(() => {
+    if (!product.value) return '';
+    const parts = [product.value.type, product.value.gender, product.value.category, product.value.price].filter(Boolean);
+    const base = `${parts.join(' · ')} — купить в Marsel, Дордой, Бишкек.`;
+    return product.value.description
+      ? `${product.value.description} ${base}`
+      : base;
+  }),
+  ogImage: computed(() => product.value?.photos?.[0] ?? undefined),
+});
+
 </script>
 
 <style lang="scss" scoped>

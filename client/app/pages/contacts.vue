@@ -124,7 +124,14 @@
 </template>
 
 <script setup lang="ts">
-import { instagramLink, whatsappLink, telegramLink } from '~/constants/common'
+import { instagramLink, whatsappLink, telegramLink } from '~/constants/common';
+
+useSeoMeta({
+  title: 'Контакты',
+  description: 'Контакты Marsel. Мы находимся на Дордой, Бишкек — Форт Оберон / Европа 3, проход 383/384/526/527/528. Пошив на заказ, консультация бесплатно.',
+  ogTitle: 'Контакты — Marsel',
+  ogDescription: 'Дордой, Бишкек — Форт Оберон / Европа 3, проход 383/384/526/527/528. Пошив на заказ, консультация бесплатно.',
+});
 
 
 </script>

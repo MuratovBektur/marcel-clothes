@@ -131,6 +131,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] });
 
 const { cartItems, isCartHydrated, remove, increment, decrement, clear } = useCart();
 

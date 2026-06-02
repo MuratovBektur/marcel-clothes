@@ -24,6 +24,7 @@
 
 <script setup lang="ts">
 // Cart is already cleared in cart.client.vue before navigation
+useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] });
 </script>
 
 <style lang="scss" scoped>

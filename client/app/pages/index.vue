@@ -153,8 +153,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
 import ProductCardList from '~/components/MainPage/ProductCardList.vue';
+
+useSeoMeta({
+  title: 'Мужские костюмы премиум класса',
+  description: 'Marsel — дом мужской одежды с 20-летним опытом. Премиальные костюмы, деловая одежда из качественных тканей. Дордой, Бишкек, Кыргызстан.',
+  ogTitle: 'Marsel — Мужские костюмы премиум класса',
+  ogDescription: 'Дом мужской одежды с 20-летним опытом. Более 1 700 000 изделий. Премиальные ткани, бесплатная доставка. Дордой, Бишкек.',
+  twitterTitle: 'Marsel — Мужские костюмы премиум класса',
+  twitterDescription: 'Дом мужской одежды с 20-летним опытом. Более 1 700 000 изделий. Премиальные ткани, бесплатная доставка. Дордой, Бишкек.',
+});
 
 const gender   = ref('');
 const category = ref('');

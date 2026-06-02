@@ -3,6 +3,17 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   app: {
     head: {
+      titleTemplate: '%s — Marsel',
+      htmlAttrs: { lang: 'ru' },
+      meta: [
+        { charset: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'format-detection', content: 'telephone=no' },
+        { property: 'og:site_name', content: 'Marsel' },
+        { property: 'og:locale', content: 'ru_RU' },
+        { property: 'og:type', content: 'website' },
+        { name: 'twitter:card', content: 'summary_large_image' },
+      ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/favicon.png' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },

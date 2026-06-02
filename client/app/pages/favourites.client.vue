@@ -76,6 +76,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import ProductCard from '../components/MainPage/ProductCard.vue';
+useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] });
 import type { Product } from '~/composables/useProducts';
 
 const { favsSet, toggle, isFavsHydrated } = useFavourites();

@@ -78,6 +78,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+
 import type { Product } from '~/composables/useProducts';
 
 const route = useRoute();
@@ -104,6 +105,13 @@ const { data, pending } = useFetch<{ data: Product[]; meta: { total: number; pag
 
 const products = computed(() => data.value?.data ?? []);
 const meta = computed(() => data.value?.meta ?? { total: 0, page: 1, lastPage: 1, limit });
+
+useSeoMeta({
+  title: computed(() => brandName.value ? `Бренд ${brandName.value}` : 'Каталог'),
+  description: computed(() => `${brandName.value} — коллекция мужской одежды в Marsel. ${meta.value.total} товаров в наличии.`),
+  ogTitle: computed(() => `${brandName.value} — Marsel`),
+  ogDescription: computed(() => `${brandName.value} — коллекция мужской одежды в Marsel, Бишкек.`),
+});
 
 function setPage(n: number) {
   if (n < 1 || n > meta.value.lastPage) return;

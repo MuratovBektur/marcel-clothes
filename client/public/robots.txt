@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+Disallow: /cart
+Disallow: /favourites
+Disallow: /order-success

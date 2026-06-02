@@ -78,6 +78,14 @@
 </template>
 
 <script setup lang="ts">
+useSeoMeta({
+  title: 'О бренде',
+  description: 'Marsel — дом мужской одежды, основанный более 20 лет назад. Более 1 700 000 изделий, премиальные ткани, гарантия качества.',
+  ogTitle: 'О бренде Marsel',
+  ogDescription: 'Дом мужской одежды с 20-летним опытом. Более 1 700 000 изделий, премиальные ткани, гарантия качества.',
+});
+
+import { producingStartedYear } from '~/constants/common';
 </script>
 
 <style lang="scss" scoped>
