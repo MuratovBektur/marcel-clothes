@@ -120,6 +120,76 @@ export class TelegramBotUpdate implements OnModuleInit {
     });
   }
 
+  // ─── Раздел Доступ ────────────────────────────────────────────────────────────
+  @Action('stg:access')
+  async onStgAccess(@Ctx() ctx: any) {
+    await ctx.answerCbQuery();
+    const phones = await this.authService.getPhones();
+    const text = phones.length
+      ? `👥 *Доступ к боту*\n\nРазрешённые номера (${phones.length}):`
+      : '👥 *Доступ к боту*\n\n_Список номеров пуст_';
+
+    const phoneRows = phones.map((p) =>
+      [Markup.button.callback(
+        `🗑 ${p.label ? p.label + ' — ' : ''}+${p.phone}`,
+        `stg:access_remove:${p.phone}`,
+      )],
+    );
+    phoneRows.push([
+      Markup.button.callback('➕ Добавить номер', 'stg:access_add'),
+      Markup.button.callback('◀️ Назад', 'stg:main'),
+    ]);
+
+    await ctx.editMessageText(text, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard(phoneRows),
+    });
+  }
+
+  @Action('stg:access_add')
+  async onStgAccessAdd(@Ctx() ctx: any) {
+    await ctx.answerCbQuery();
+    ctx.session.awaitingAccessPhone = true;
+    await ctx.reply(
+      '📱 Введите номер телефона для добавления доступа:\n\n_Пример: +996555123456_\n\n_Можно добавить метку: +996555123456 Имя_',
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          keyboard: [[{ text: '❌ Отмена' }]],
+          resize_keyboard: true,
+        },
+      },
+    );
+  }
+
+  @Action(/^stg:access_remove:(.+)/)
+  async onStgAccessRemove(@Ctx() ctx: any) {
+    const phone = (ctx.callbackQuery.data as string).replace('stg:access_remove:', '');
+    await this.authService.removePhone(phone);
+    await ctx.answerCbQuery('✅ Номер удалён');
+
+    const phones = await this.authService.getPhones();
+    const text = phones.length
+      ? `👥 *Доступ к боту*\n\nРазрешённые номера (${phones.length}):`
+      : '👥 *Доступ к боту*\n\n_Список номеров пуст_';
+
+    const phoneRows = phones.map((p) =>
+      [Markup.button.callback(
+        `🗑 ${p.label ? p.label + ' — ' : ''}+${p.phone}`,
+        `stg:access_remove:${p.phone}`,
+      )],
+    );
+    phoneRows.push([
+      Markup.button.callback('➕ Добавить номер', 'stg:access_add'),
+      Markup.button.callback('◀️ Назад', 'stg:main'),
+    ]);
+
+    await ctx.editMessageText(text, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard(phoneRows),
+    });
+  }
+
   @Action('stg:pub')
   async onStgPub(@Ctx() ctx: any) {
     await ctx.answerCbQuery();
@@ -310,6 +380,34 @@ export class TelegramBotUpdate implements OnModuleInit {
     if (ctx.scene?.current) return;
 
     const text: string = ctx.message?.text ?? '';
+
+    // ── Ввод номера телефона для доступа к боту ──────────────────────────────
+    if (ctx.session?.awaitingAccessPhone) {
+      if (text === '❌ Отмена') {
+        ctx.session.awaitingAccessPhone = false;
+        await ctx.reply('Отменено.', { reply_markup: MAIN_KEYBOARD });
+        return;
+      }
+
+      // Format: "+996555123456" or "+996555123456 Имя"
+      const parts = text.trim().split(/\s+/);
+      const rawPhone = parts[0];
+      const label = parts.slice(1).join(' ') || undefined;
+
+      const cleanPhone = rawPhone.replace(/\D/g, '');
+      if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+        await ctx.reply('❗ Введите корректный номер, например: +996555123456');
+        return;
+      }
+
+      ctx.session.awaitingAccessPhone = false;
+      await this.authService.addPhone(cleanPhone, label);
+      await ctx.reply(
+        `✅ Номер *+${cleanPhone}*${label ? ` (${label})` : ''} добавлен в список доступа.`,
+        { parse_mode: 'Markdown', reply_markup: MAIN_KEYBOARD },
+      );
+      return;
+    }
 
     // ── Ввод номера телефона WhatsApp ─────────────────────────────────────────
     if (ctx.session?.awaitingWaPhone) {
@@ -750,6 +848,7 @@ export class TelegramBotUpdate implements OnModuleInit {
   private settingsMainKeyboard() {
     return Markup.inlineKeyboard([
       [Markup.button.callback('📢 Публикация', 'stg:pub')],
+      [Markup.button.callback('👥 Доступ', 'stg:access')],
     ]);
   }
 
