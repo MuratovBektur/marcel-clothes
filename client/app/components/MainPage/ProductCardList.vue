@@ -8,66 +8,32 @@
         <h2 class="section-title">Наши <em>костюмы</em></h2>
       </div>
       <div class="catalog__filters">
-        <button
-          v-for="tab in FILTER_TABS"
-          :key="tab.value"
-          class="filter-tab"
-          :class="{ active: selectedType === tab.value }"
-          @click="$emit('filter-type', tab.value)"
-        >{{ tab.label }}</button>
+        <button v-for="tab in FILTER_TABS" :key="tab.value" class="filter-tab"
+          :class="{ active: selectedType === tab.value }" @click="$emit('filter-type', tab.value)">{{ tab.label
+          }}</button>
       </div>
     </div>
 
     <!-- ── FILTERS ── -->
-    <DesktopFilter
-      :selected-gender="selectedGender"
-      :selected-category="selectedCategory"
-      :selected-type="selectedType"
-      :selected-brand="selectedBrand"
-      :selected-country="selectedCountry"
-      :selected-materials="selectedMaterials"
-      :selected-colors="selectedColors"
-      :selected-sizes="selectedSizes"
-      :selected-price-min="selectedPriceMin"
-      :selected-price-max="selectedPriceMax"
-      :meta="meta"
-      :pending="pending"
-      @filter-gender="$emit('filter-gender', $event)"
-      @filter-category="$emit('filter-category', $event)"
-      @filter-type="$emit('filter-type', $event)"
-      @filter-brand="$emit('filter-brand', $event)"
-      @filter-country="$emit('filter-country', $event)"
-      @filter-materials="$emit('filter-materials', $event)"
-      @filter-colors="$emit('filter-colors', $event)"
-      @filter-sizes="$emit('filter-sizes', $event)"
-      @filter-price="$emit('filter-price', $event)"
-      @filter-reset="$emit('filter-reset')"
-    />
+    <DesktopFilter :selected-gender="selectedGender" :selected-category="selectedCategory" :selected-type="selectedType"
+      :selected-brand="selectedBrand" :selected-country="selectedCountry" :selected-materials="selectedMaterials"
+      :selected-colors="selectedColors" :selected-sizes="selectedSizes" :selected-price-min="selectedPriceMin"
+      :selected-price-max="selectedPriceMax" :meta="meta" :pending="pending"
+      @filter-gender="$emit('filter-gender', $event)" @filter-category="$emit('filter-category', $event)"
+      @filter-type="$emit('filter-type', $event)" @filter-brand="$emit('filter-brand', $event)"
+      @filter-country="$emit('filter-country', $event)" @filter-materials="$emit('filter-materials', $event)"
+      @filter-colors="$emit('filter-colors', $event)" @filter-sizes="$emit('filter-sizes', $event)"
+      @filter-price="$emit('filter-price', $event)" @filter-reset="$emit('filter-reset')" />
 
-    <MobileFilter
-      :selected-gender="selectedGender"
-      :selected-category="selectedCategory"
-      :selected-type="selectedType"
-      :selected-brand="selectedBrand"
-      :selected-country="selectedCountry"
-      :selected-materials="selectedMaterials"
-      :selected-colors="selectedColors"
-      :selected-sizes="selectedSizes"
-      :selected-price-min="selectedPriceMin"
-      :selected-price-max="selectedPriceMax"
-      :meta="meta"
-      :pending="pending"
-      @filter-gender="$emit('filter-gender', $event)"
-      @filter-category="$emit('filter-category', $event)"
-      @filter-type="$emit('filter-type', $event)"
-      @filter-brand="$emit('filter-brand', $event)"
-      @filter-country="$emit('filter-country', $event)"
-      @filter-materials="$emit('filter-materials', $event)"
-      @filter-colors="$emit('filter-colors', $event)"
-      @filter-sizes="$emit('filter-sizes', $event)"
-      @filter-price="$emit('filter-price', $event)"
-      @filter-reset="$emit('filter-reset')"
-    />
+    <MobileFilter :selected-gender="selectedGender" :selected-category="selectedCategory" :selected-type="selectedType"
+      :selected-brand="selectedBrand" :selected-country="selectedCountry" :selected-materials="selectedMaterials"
+      :selected-colors="selectedColors" :selected-sizes="selectedSizes" :selected-price-min="selectedPriceMin"
+      :selected-price-max="selectedPriceMax" :meta="meta" :pending="pending"
+      @filter-gender="$emit('filter-gender', $event)" @filter-category="$emit('filter-category', $event)"
+      @filter-type="$emit('filter-type', $event)" @filter-brand="$emit('filter-brand', $event)"
+      @filter-country="$emit('filter-country', $event)" @filter-materials="$emit('filter-materials', $event)"
+      @filter-colors="$emit('filter-colors', $event)" @filter-sizes="$emit('filter-sizes', $event)"
+      @filter-price="$emit('filter-price', $event)" @filter-reset="$emit('filter-reset')" />
 
     <!-- ── PAGE LABEL ── -->
     <div class="section-label">
@@ -85,11 +51,7 @@
       </template>
 
       <template v-else-if="products.length">
-        <ProductCard
-          v-for="item in products"
-          :key="item.id"
-          :product="item"
-        />
+        <ProductCard v-for="item in products" :key="item.id" :product="item" />
       </template>
 
       <div v-else class="grid__empty">
@@ -100,29 +62,17 @@
 
     <!-- ── PAGINATION ── -->
     <div v-if="!pending && meta.lastPage > 1" class="pagination">
-      <button
-        class="page-btn page-btn--arrow"
-        :disabled="meta.page <= 1"
-        @click="$emit('change-page', meta.page - 1)"
-        aria-label="Назад"
-      >‹</button>
+      <button class="page-btn page-btn--arrow" :disabled="meta.page <= 1" @click="$emit('change-page', meta.page - 1)"
+        aria-label="Назад">‹</button>
 
       <template v-for="p in pageRange" :key="p">
         <span v-if="p === '...'" class="page-gap">…</span>
-        <button
-          v-else
-          class="page-btn"
-          :class="{ 'page-btn--on': p === meta.page }"
-          @click="$emit('change-page', p)"
-        >{{ p }}</button>
+        <button v-else class="page-btn" :class="{ 'page-btn--on': p === meta.page }" @click="$emit('change-page', p)">{{
+          p }}</button>
       </template>
 
-      <button
-        class="page-btn page-btn--arrow"
-        :disabled="meta.page >= meta.lastPage"
-        @click="$emit('change-page', meta.page + 1)"
-        aria-label="Вперёд"
-      >›</button>
+      <button class="page-btn page-btn--arrow" :disabled="meta.page >= meta.lastPage"
+        @click="$emit('change-page', meta.page + 1)" aria-label="Вперёд">›</button>
     </div>
 
   </div>
@@ -136,10 +86,10 @@ import MobileFilter from './MobileFilter.vue';
 import type { Product } from '~/composables/useProducts';
 
 const FILTER_TABS = [
-  { label: 'Все',      value: '' },
+  { label: 'Все', value: '' },
   { label: 'Классика', value: 'Классика' },
   { label: 'Slim Fit', value: 'Slim Fit' },
-  { label: 'Casual',   value: 'Casual' },
+  { label: 'Casual', value: 'Casual' },
 ];
 
 const props = withDefaults(defineProps<{
@@ -253,7 +203,9 @@ $bp: 1200px;
   color: $navy;
   line-height: 1.1;
 
-  em { font-style: italic; }
+  em {
+    font-style: italic;
+  }
 }
 
 // ── Filter tabs ───────────────────────────────────────────
@@ -316,7 +268,7 @@ $bp: 1200px;
   grid-template-columns: repeat(3, 1fr);
   gap: 28px;
   padding-bottom: 60px;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 .grid__skeleton {
@@ -328,8 +280,13 @@ $bp: 1200px;
 }
 
 @keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .grid__empty {
@@ -435,9 +392,13 @@ $bp: 1200px;
     gap: 20px;
   }
 
-  .section-title { font-size: 32px; }
+  .section-title {
+    font-size: 32px;
+  }
 
-  .catalog__filters { flex-wrap: wrap; }
+  .catalog__filters {
+    flex-wrap: wrap;
+  }
 
   .grid {
     grid-template-columns: repeat(2, 1fr);
@@ -445,23 +406,60 @@ $bp: 1200px;
     padding-bottom: 32px;
   }
 
-  .pagination { padding: 24px 0 16px; flex-wrap: wrap; gap: 4px; }
-  .page-btn   { min-width: 38px; height: 38px; font-size: 12px; }
-  .page-gap   { min-width: 38px; height: 38px; }
+  .pagination {
+    padding: 24px 0 16px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .page-btn {
+    min-width: 38px;
+    height: 38px;
+    font-size: 12px;
+  }
+
+  .page-gap {
+    min-width: 38px;
+    height: 38px;
+  }
 }
 
 @media (max-width: 540px) {
-  .grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
 }
 
 @media (max-width: 375px) {
-  .section-title { font-size: 28px; }
-  .grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+  .catalog {
+    padding-left: 10px;
+    padding-right: 10px;
   }
-  .section-label { padding: 16px 0 12px; }
-  .page-btn, .page-gap { min-width: 32px; height: 32px; font-size: 11px; }
-  .pagination { padding: 16px 0; gap: 2px; }
+
+  .section-title {
+    font-size: 26px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .section-label {
+    padding: 16px 0 12px;
+  }
+
+  .page-btn,
+  .page-gap {
+    min-width: 30px;
+    height: 30px;
+    font-size: 10px;
+  }
+
+  .pagination {
+    padding: 16px 0;
+    gap: 2px;
+  }
 }
 </style>

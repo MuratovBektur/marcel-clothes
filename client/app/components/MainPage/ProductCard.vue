@@ -1,16 +1,13 @@
 <template>
   <div class="product-card" @click="goToProduct">
     <div class="product-card__img">
-      <img
-        v-if="product.photos?.[0]"
-        :src="product.photos[0]"
-        :alt="product.type"
-        loading="lazy"
-        class="product-card__photo"
-      />
+      <img v-if="product.photos?.[0]" :src="product.photos[0]" :alt="product.type" loading="lazy"
+        class="product-card__photo" />
       <div v-else class="product-card__no-img">
-        <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24" opacity="0.12">
-          <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/>
+        <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"
+          opacity="0.12">
+          <path
+            d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z" />
         </svg>
       </div>
 
@@ -19,12 +16,9 @@
       <div class="product-card__actions">
         <button class="btn-add" @click.stop>Смотреть</button>
         <ClientOnly>
-          <button
-            class="btn-wish"
-            :class="{ 'btn-wish--active': isFav(product.id) }"
-            @click.stop="toggle(product.id)"
-            :aria-label="isFav(product.id) ? 'Убрать из избранного' : 'В избранное'"
-          >{{ isFav(product.id) ? '♥' : '♡' }}</button>
+          <button class="btn-wish" :class="{ 'btn-wish--active': isFav(product.id) }" @click.stop="toggle(product.id)"
+            :aria-label="isFav(product.id) ? 'Убрать из избранного' : 'В избранное'">{{ isFav(product.id) ? '♥' : '♡'
+            }}</button>
         </ClientOnly>
       </div>
     </div>
@@ -35,13 +29,8 @@
       <div class="product-card__footer">
         <div class="product-card__price">{{ product.price }}</div>
         <div v-if="product.colors?.length" class="product-card__colors">
-          <span
-            v-for="c in product.colors.slice(0, 4)"
-            :key="c"
-            class="color-dot"
-            :style="{ background: colorToHex(c) }"
-            :title="c"
-          />
+          <span v-for="c in product.colors.slice(0, 4)" :key="c" class="color-dot"
+            :style="{ background: colorToHex(c) }" :title="c" />
         </div>
       </div>
     </div>
@@ -144,8 +133,15 @@ function colorToHex(name: string): string {
     text-transform: uppercase;
     z-index: 2;
 
-    &--new  { background: $navy;  color: $cream;   }
-    &--sale { background: $gold;  color: $navy-3;  }
+    &--new {
+      background: $navy;
+      color: $cream;
+    }
+
+    &--sale {
+      background: $gold;
+      color: $navy-3;
+    }
   }
 
   // ── Hover actions ─────────────────────────────────────
@@ -183,6 +179,7 @@ function colorToHex(name: string): string {
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.2;
+    min-height: 2.4em;
   }
 
   &__sub {
@@ -230,7 +227,9 @@ function colorToHex(name: string): string {
   cursor: pointer;
   transition: background 0.25s;
 
-  &:hover { background: $navy-2; }
+  &:hover {
+    background: $navy-2;
+  }
 }
 
 .btn-wish {
@@ -247,7 +246,10 @@ function colorToHex(name: string): string {
   justify-content: center;
 
   &:hover,
-  &--active { background: #fce4e4; color: #c41c1c; }
+  &--active {
+    background: #fce4e4;
+    color: #c41c1c;
+  }
 }
 
 // ── Color dots ────────────────────────────────────────────
@@ -261,24 +263,70 @@ function colorToHex(name: string): string {
   cursor: pointer;
   transition: transform 0.2s;
 
-  &:hover { transform: scale(1.3); }
+  &:hover {
+    transform: scale(1.3);
+  }
 }
 
 // ── Responsive ────────────────────────────────────────────
 
 @media (max-width: 768px) {
   .product-card {
-    &__info  { padding: 14px 16px 16px; }
-    &__name  { font-size: 18px; }
-    &__price { font-size: 20px; }
-    &__sub   { font-size: 9px; margin-bottom: 10px; }
+    &__info {
+      padding: 14px 16px 16px;
+    }
+
+    &__name {
+      font-size: 18px;
+    }
+
+    &__price {
+      font-size: 20px;
+    }
+
+    &__sub {
+      font-size: 9px;
+      margin-bottom: 10px;
+    }
   }
 }
 
 @media (max-width: 480px) {
   .product-card {
-    &__info  { padding: 12px 14px 14px; }
-    &__name  { font-size: 17px; }
+    &__info {
+      padding: 12px 14px 14px;
+    }
+
+    &__name {
+      font-size: 17px;
+    }
+  }
+}
+
+@media (max-width: 375px) {
+  .product-card {
+    &__info {
+      padding: 8px 10px 10px;
+    }
+
+    &__name {
+      font-size: 15px;
+    }
+
+    &__price {
+      font-size: 16px;
+    }
+
+    &__sub {
+      font-size: 8px;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+  }
+
+  .color-dot {
+    width: 10px;
+    height: 10px;
   }
 }
 </style>
