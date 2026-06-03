@@ -10,12 +10,9 @@ import { Injectable } from '@nestjs/common';
 import { Markup } from 'telegraf';
 import { ProductsService } from '../products/products.service';
 import { FileStorageService } from './file-storage.service';
+import { CustomOptionsService } from './custom-options.service';
 import {
-  COLORS,
-  MATERIALS,
   MAX_EXTRA_PHOTOS,
-  SIZES,
-  SUIT_TYPES,
   CLOTHING_WIZARD_ID,
   MAIN_KEYBOARD,
 } from './constants';
@@ -30,6 +27,7 @@ const DONE_CB = 'wiz_done';
 const CANCEL_CB = 'wiz_cancel';
 const CANCEL_CONFIRM_CB = 'wiz_cancel_confirm';
 const CANCEL_ABORT_CB = 'wiz_cancel_abort';
+const TYPE_CUSTOM_CB = 'type_custom';
 const MAT_CUSTOM_CB = 'mat_custom';
 const COL_CUSTOM_CB = 'col_custom';
 const SIZE_CUSTOM_CB = 'size_custom';
@@ -41,7 +39,7 @@ const SKIP_TEXT = '⏭ Пропустить';
 const CANCEL_TEXT = '❌ Отмена';
 
 // ─── Cursor → шаг ─────────────────────────────────────────────────────────────
-// 0  = Тип           (inline, callback type:0..4)
+// 0  = Тип           (inline, callback type:0..N)
 // 1  = Цена          (text через WizardStep(1))
 // 2  = Материалы     (inline, multi + text)
 // 3  = Цвета         (inline, multi + text)
@@ -53,7 +51,7 @@ const CANCEL_TEXT = '❌ Отмена';
 // ─── State ────────────────────────────────────────────────────────────────────
 interface WizardState {
   submission: Partial<ClothingSubmission>;
-  waitingForCustom: 'material' | 'color' | 'size' | null;
+  waitingForCustom: 'type' | 'material' | 'color' | 'size' | null;
   customStepMessageId: number | null;
   selectedMaterials: string[];
   selectedColors: string[];
@@ -84,6 +82,7 @@ export class ClothingWizard {
   constructor(
     private readonly productsService: ProductsService,
     private readonly fileStorage: FileStorageService,
+    private readonly customOptions: CustomOptionsService,
   ) {}
 
   @SceneEnter()
@@ -97,7 +96,11 @@ export class ClothingWizard {
       ctx.session.__scenes.state = {};
     }
     await removeReplyKeyboard(ctx);
-    const firstMsg = await sendSuitTypeKeyboard(ctx, undefined);
+    const firstMsg = await sendSuitTypeKeyboard(
+      ctx,
+      this.customOptions.getOptions('suitTypes'),
+      undefined,
+    );
     ctx.session.__wizFirstMsgId = firstMsg.message_id;
   }
 
@@ -134,13 +137,27 @@ export class ClothingWizard {
   async onTypeSelect(@Ctx() ctx: any) {
     if (ctx.wizard.cursor !== 0) { await ctx.answerCbQuery(); return; }
     const idx = parseInt((ctx.callbackQuery.data as string).replace('type:', ''), 10);
-    const type = SUIT_TYPES[idx];
+    const suitTypes = this.customOptions.getOptions('suitTypes');
+    const type = suitTypes[idx];
     if (!type) { await ctx.answerCbQuery(); return; }
     const state = getState(ctx);
     state.submission.type = type;
+    state.waitingForCustom = null;
     ctx.wizard.next();
     await ctx.answerCbQuery(`✅ ${type}`);
     await sendPricePrompt(ctx);
+  }
+
+  // cursor 0 — Свой вариант типа
+  @Action(TYPE_CUSTOM_CB)
+  async onTypeCustom(@Ctx() ctx: any) {
+    if (ctx.wizard.cursor !== 0) { await ctx.answerCbQuery(); return; }
+    const state = getState(ctx);
+    state.waitingForCustom = 'type';
+    await ctx.answerCbQuery();
+    await ctx.reply('✏️ Введите свой тип костюма:', {
+      ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize(),
+    });
   }
 
   // cursor 2 — Материалы (toggle)
@@ -152,7 +169,12 @@ export class ClothingWizard {
     toggle(state.selectedMaterials, mat);
     await ctx.answerCbQuery();
     await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(MATERIALS, state.selectedMaterials, 'mat', MAT_CUSTOM_CB).reply_markup,
+      multiSelectMarkup(
+        this.customOptions.getOptions('materials'),
+        state.selectedMaterials,
+        'mat',
+        MAT_CUSTOM_CB,
+      ).reply_markup,
     );
   }
 
@@ -165,7 +187,12 @@ export class ClothingWizard {
     toggle(state.selectedColors, col);
     await ctx.answerCbQuery();
     await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(COLORS, state.selectedColors, 'col', COL_CUSTOM_CB).reply_markup,
+      multiSelectMarkup(
+        this.customOptions.getOptions('colors'),
+        state.selectedColors,
+        'col',
+        COL_CUSTOM_CB,
+      ).reply_markup,
     );
   }
 
@@ -178,7 +205,12 @@ export class ClothingWizard {
     toggle(state.selectedSizes, size);
     await ctx.answerCbQuery();
     await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(SIZES.default, state.selectedSizes, 'size', SIZE_CUSTOM_CB).reply_markup,
+      multiSelectMarkup(
+        this.customOptions.getOptions('sizes'),
+        state.selectedSizes,
+        'size',
+        SIZE_CUSTOM_CB,
+      ).reply_markup,
     );
   }
 
@@ -196,7 +228,7 @@ export class ClothingWizard {
       state.submission.materials = [...state.selectedMaterials];
       ctx.wizard.next();
       await ctx.answerCbQuery();
-      await sendColorsKeyboard(ctx, state.selectedColors);
+      await sendColorsKeyboard(ctx, this.customOptions.getOptions('colors'), state.selectedColors);
     } else if (cursor === 3) {
       if (!state.selectedColors.length) {
         await ctx.answerCbQuery('Выберите хотя бы один цвет!', { show_alert: true });
@@ -205,7 +237,7 @@ export class ClothingWizard {
       state.submission.colors = [...state.selectedColors];
       ctx.wizard.next();
       await ctx.answerCbQuery();
-      await sendSizesKeyboard(ctx, state.selectedSizes);
+      await sendSizesKeyboard(ctx, this.customOptions.getOptions('sizes'), state.selectedSizes);
     } else if (cursor === 4) {
       if (!state.selectedSizes.length) {
         await ctx.answerCbQuery('Выберите хотя бы один размер!', { show_alert: true });
@@ -233,8 +265,37 @@ export class ClothingWizard {
 
   // ═══ WIZARD STEPS ════════════════════════════════════════════════════════════
 
-  // Заглушка для inline-шага (0)
-  @WizardStep(0) async onStep0() {}
+  // Шаг 0: Кастомный ввод типа костюма
+  @WizardStep(0)
+  async onStep0(@Ctx() ctx: any, @Message() msg: any) {
+    const state = getState(ctx);
+    if (state.waitingForCustom !== 'type') return;
+
+    if (msg?.text === CANCEL_TEXT) {
+      await sendCancelConfirmation(ctx);
+      return;
+    }
+    if (msg?.text === BACK_TEXT) {
+      state.waitingForCustom = null;
+      await removeReplyKeyboard(ctx);
+      await sendSuitTypeKeyboard(
+        ctx,
+        this.customOptions.getOptions('suitTypes'),
+        state.submission.type,
+      );
+      return;
+    }
+
+    const text = (msg?.text as string)?.trim();
+    if (!text) { await ctx.reply('Введите тип костюма.'); return; }
+
+    this.customOptions.addCustomOption('suitTypes', text);
+    state.submission.type = text;
+    state.waitingForCustom = null;
+    ctx.wizard.next();
+    await removeReplyKeyboard(ctx);
+    await sendPricePrompt(ctx);
+  }
 
   // Обработчики "Свой вариант" для multi-select
   @Action(MAT_CUSTOM_CB)
@@ -286,7 +347,11 @@ export class ClothingWizard {
     if (msg?.text === BACK_TEXT) {
       ctx.wizard.cursor = 0;
       await removeReplyKeyboard(ctx);
-      await sendSuitTypeKeyboard(ctx, state.submission.type);
+      await sendSuitTypeKeyboard(
+        ctx,
+        this.customOptions.getOptions('suitTypes'),
+        state.submission.type,
+      );
       return;
     }
 
@@ -303,7 +368,11 @@ export class ClothingWizard {
     state.submission.price = text;
     ctx.wizard.next();
     await removeReplyKeyboard(ctx);
-    await sendMaterialsKeyboard(ctx, state.selectedMaterials);
+    await sendMaterialsKeyboard(
+      ctx,
+      this.customOptions.getOptions('materials'),
+      state.selectedMaterials,
+    );
   }
 
   // Шаг 2: Кастомный ввод материалов
@@ -319,14 +388,22 @@ export class ClothingWizard {
       state.waitingForCustom = null;
       state.customStepMessageId = null;
       await removeReplyKeyboard(ctx);
-      await sendMaterialsKeyboard(ctx, state.selectedMaterials);
+      await sendMaterialsKeyboard(
+        ctx,
+        this.customOptions.getOptions('materials'),
+        state.selectedMaterials,
+      );
       return;
     }
     const customs = (msg?.text as string)?.split(',').map((s) => s.trim()).filter(Boolean);
     if (!customs?.length) { await ctx.reply('Введите хотя бы один вариант через запятую.'); return; }
     const added: string[] = [];
     for (const c of customs) {
-      if (!state.selectedMaterials.includes(c)) { state.selectedMaterials.push(c); added.push(c); }
+      if (!state.selectedMaterials.includes(c)) {
+        state.selectedMaterials.push(c);
+        added.push(c);
+        this.customOptions.addCustomOption('materials', c);
+      }
     }
     state.waitingForCustom = null;
     state.customStepMessageId = null;
@@ -350,14 +427,22 @@ export class ClothingWizard {
       state.waitingForCustom = null;
       state.customStepMessageId = null;
       await removeReplyKeyboard(ctx);
-      await sendColorsKeyboard(ctx, state.selectedColors);
+      await sendColorsKeyboard(
+        ctx,
+        this.customOptions.getOptions('colors'),
+        state.selectedColors,
+      );
       return;
     }
     const customs = (msg?.text as string)?.split(',').map((s) => s.trim()).filter(Boolean);
     if (!customs?.length) { await ctx.reply('Введите хотя бы один вариант через запятую.'); return; }
     const added: string[] = [];
     for (const c of customs) {
-      if (!state.selectedColors.includes(c)) { state.selectedColors.push(c); added.push(c); }
+      if (!state.selectedColors.includes(c)) {
+        state.selectedColors.push(c);
+        added.push(c);
+        this.customOptions.addCustomOption('colors', c);
+      }
     }
     state.waitingForCustom = null;
     state.customStepMessageId = null;
@@ -381,14 +466,22 @@ export class ClothingWizard {
       state.waitingForCustom = null;
       state.customStepMessageId = null;
       await removeReplyKeyboard(ctx);
-      await sendSizesKeyboard(ctx, state.selectedSizes);
+      await sendSizesKeyboard(
+        ctx,
+        this.customOptions.getOptions('sizes'),
+        state.selectedSizes,
+      );
       return;
     }
     const customs = (msg?.text as string)?.split(',').map((s) => s.trim()).filter(Boolean);
     if (!customs?.length) { await ctx.reply('Введите хотя бы один вариант через запятую.'); return; }
     const added: string[] = [];
     for (const c of customs) {
-      if (!state.selectedSizes.includes(c)) { state.selectedSizes.push(c); added.push(c); }
+      if (!state.selectedSizes.includes(c)) {
+        state.selectedSizes.push(c);
+        added.push(c);
+        this.customOptions.addCustomOption('sizes', c);
+      }
     }
     state.waitingForCustom = null;
     state.customStepMessageId = null;
@@ -414,7 +507,11 @@ export class ClothingWizard {
       state.submission.photos = undefined;
       ctx.wizard.cursor = 4;
       await removeReplyKeyboard(ctx);
-      await sendSizesKeyboard(ctx, state.selectedSizes);
+      await sendSizesKeyboard(
+        ctx,
+        this.customOptions.getOptions('sizes'),
+        state.selectedSizes,
+      );
       return;
     }
 
@@ -504,11 +601,11 @@ export class ClothingWizard {
   private async showStep(ctx: any, step: number) {
     const state = getState(ctx);
     switch (step) {
-      case 0: return sendSuitTypeKeyboard(ctx, state.submission.type);
+      case 0: return sendSuitTypeKeyboard(ctx, this.customOptions.getOptions('suitTypes'), state.submission.type);
       case 1: return sendPricePrompt(ctx);
-      case 2: return sendMaterialsKeyboard(ctx, state.selectedMaterials);
-      case 3: return sendColorsKeyboard(ctx, state.selectedColors);
-      case 4: return sendSizesKeyboard(ctx, state.selectedSizes);
+      case 2: return sendMaterialsKeyboard(ctx, this.customOptions.getOptions('materials'), state.selectedMaterials);
+      case 3: return sendColorsKeyboard(ctx, this.customOptions.getOptions('colors'), state.selectedColors);
+      case 4: return sendSizesKeyboard(ctx, this.customOptions.getOptions('sizes'), state.selectedSizes);
       case 6: return sendDescriptionPrompt(ctx);
     }
   }
@@ -616,11 +713,13 @@ function multiSelectMarkup(
 
 async function sendSuitTypeKeyboard(
   ctx: any,
+  suitTypes: string[],
   selected: string | undefined,
 ): Promise<{ message_id: number }> {
-  const buttons = SUIT_TYPES.map((t, i) => [
+  const buttons = suitTypes.map((t, i) => [
     Markup.button.callback(selected === t ? `✅ ${t}` : t, `type:${i}`),
   ]);
+  buttons.push([Markup.button.callback('✏️ Свой вариант', TYPE_CUSTOM_CB)]);
   buttons.push([Markup.button.callback('❌ Отмена', CANCEL_CB)]);
   return (await ctx.reply('👔 *Шаг 1 из 8* — Выберите тип костюма:', {
     parse_mode: 'Markdown',
@@ -636,24 +735,24 @@ async function sendPricePrompt(ctx: any) {
   );
 }
 
-async function sendMaterialsKeyboard(ctx: any, selected: string[]) {
+async function sendMaterialsKeyboard(ctx: any, items: string[], selected: string[]) {
   await ctx.reply(
     '🧵 *Шаг 3 из 8* — Выберите материал(ы):\n_Можно выбрать несколько_',
-    { parse_mode: 'Markdown', ...multiSelectMarkup(MATERIALS, selected, 'mat', MAT_CUSTOM_CB) },
+    { parse_mode: 'Markdown', ...multiSelectMarkup(items, selected, 'mat', MAT_CUSTOM_CB) },
   );
 }
 
-async function sendColorsKeyboard(ctx: any, selected: string[]) {
+async function sendColorsKeyboard(ctx: any, items: string[], selected: string[]) {
   await ctx.reply(
     '🎨 *Шаг 4 из 8* — Выберите цвет(а):\n_Можно выбрать несколько_',
-    { parse_mode: 'Markdown', ...multiSelectMarkup(COLORS, selected, 'col', COL_CUSTOM_CB) },
+    { parse_mode: 'Markdown', ...multiSelectMarkup(items, selected, 'col', COL_CUSTOM_CB) },
   );
 }
 
-async function sendSizesKeyboard(ctx: any, selected: string[]) {
+async function sendSizesKeyboard(ctx: any, items: string[], selected: string[]) {
   await ctx.reply(
     '📏 *Шаг 5 из 8* — Выберите размер(ы):\n_Можно выбрать несколько_',
-    { parse_mode: 'Markdown', ...multiSelectMarkup(SIZES.default, selected, 'size', SIZE_CUSTOM_CB) },
+    { parse_mode: 'Markdown', ...multiSelectMarkup(items, selected, 'size', SIZE_CUSTOM_CB) },
   );
 }
 

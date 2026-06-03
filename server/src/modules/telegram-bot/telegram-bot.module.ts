@@ -9,6 +9,7 @@ import { TelegramBotUpdate } from './telegram-bot.update';
 import { ProductsModule } from '../products/products.module';
 import { OrdersModule } from '../orders/orders.module';
 import { FileStorageService } from './file-storage.service';
+import { CustomOptionsService } from './custom-options.service';
 import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
@@ -40,6 +41,7 @@ if (!TELEGRAM_BOT_TOKEN) {
     ClothingWizard,
     EditProductScene,
     FileStorageService,
+    CustomOptionsService,
     AuthService,
     GroupService,
     TgGroupService,
