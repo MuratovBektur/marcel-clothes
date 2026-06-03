@@ -6,6 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const API_BASE = process.env.API_BASE || 'http://server:5000'
 const SITE_URL = 'https://marcel.kg'
 const OUTPUT = join(__dirname, '../public/sitemap.xml')
+const OUTPUT_BUILD = join(__dirname, '../.output/public/sitemap.xml')
 const INTERVAL_MS = 60 * 60 * 1000
 const RETRY_DELAY_MS = 15 * 1000
 const MAX_RETRIES = 10
@@ -71,6 +72,7 @@ ${entries.join('\n')}
 </urlset>`
 
   writeFileSync(OUTPUT, xml, 'utf-8')
+  try { writeFileSync(OUTPUT_BUILD, xml, 'utf-8') } catch {}
   console.log(
     `[sitemap] ${new Date().toISOString()} — ${products.length} товаров, ${brands.length} брендов`,
   )
