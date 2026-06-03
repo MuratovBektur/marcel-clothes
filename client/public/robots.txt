@@ -4,3 +4,5 @@ Allow: /
 Disallow: /cart
 Disallow: /favourites
 Disallow: /order-success
+
+Sitemap: https://marcel.kg/sitemap.xml

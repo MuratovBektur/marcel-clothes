@@ -11,7 +11,7 @@ services:
       - 3000
     environment:
       - NODE_ENV=development
-    command: npm run dev
+    command: sh -c "node scripts/generate-sitemap.mjs --watch & npm run dev"
    
     volumes:
       - /etc/localtime:/etc/localtime:ro

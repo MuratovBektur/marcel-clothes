@@ -3,12 +3,14 @@
   "type": "module",
   "private": true,
   "scripts": {
-"build": "nuxt build",
+    "build": "nuxt build",
     "dev": "nuxt dev",
     "start": "node .output/server/index.mjs",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "sitemap": "node scripts/generate-sitemap.mjs",
+    "sitemap:watch": "node scripts/generate-sitemap.mjs --watch"
   },
   "dependencies": {
     "@nuxt/image": "^2.0.0",
