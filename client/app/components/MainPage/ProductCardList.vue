@@ -401,7 +401,7 @@ $bp: 1200px;
   }
 
   .grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     padding-bottom: 32px;
   }
@@ -424,14 +424,14 @@ $bp: 1200px;
   }
 }
 
-@media (max-width: 540px) {
+@media (max-width: 800px) {
   .grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
 }
 
-@media (max-width: 375px) {
+@media (max-width: 500px) {
   .catalog {
     padding-left: 10px;
     padding-right: 10px;
