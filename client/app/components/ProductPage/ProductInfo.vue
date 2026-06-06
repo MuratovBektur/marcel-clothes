@@ -56,6 +56,15 @@
             <span class="product-info__cart-arrow">→</span>
             Перейти в корзину
           </NuxtLink>
+          <button
+            class="product-info__cart-btn product-info__cart-btn--wish"
+            :class="{ 'product-info__cart-btn--wish-active': isFav(product.id) }"
+            @click="toggle(product.id)"
+            :aria-label="isFav(product.id) ? 'Убрать из избранного' : 'В избранное'"
+          >
+            <span class="product-info__wish-icon">{{ isFav(product.id) ? '♥' : '♡' }}</span>
+            {{ isFav(product.id) ? 'В избранном' : 'В избранное' }}
+          </button>
         </div>
       </div>
 
@@ -77,6 +86,8 @@ const props = defineProps<{ product: Product }>()
 
 const { add, increment, decrement, getProductItems } = useCart()
 const cartItem = computed(() => getProductItems(props.product.id)[0] ?? null)
+
+const { toggle, isFav } = useFavourites()
 
 function addToCart() {
   add({
@@ -245,7 +256,7 @@ function addToCart() {
     letter-spacing: 3px; text-transform: uppercase; padding: 16px 20px;
     border: 1.5px solid #111; cursor: pointer; text-decoration: none;
     transition: background .15s, color .15s, border-color .15s;
-    white-space: nowrap;
+    white-space: nowrap; max-height: 46px;
 
     &:hover:not(&--disabled) { background: transparent; color: #111; }
 
@@ -262,12 +273,24 @@ function addToCart() {
       background: #111; color: #fff;
       &:hover { background: transparent; color: #111; }
     }
+
+    &--wish {
+      background: transparent; border-color: #bbb; color: #888;
+      &:hover { border-color: #c41c1c; color: #c41c1c; background: #fce4e4; }
+    }
+
+    &--wish-active {
+      background: #fce4e4; border-color: #c41c1c; color: #c41c1c;
+      &:hover { background: transparent; border-color: #bbb; color: #888; }
+    }
   }
 
   &__cart-arrow {
     font-size: 14px; transition: transform .15s;
     .product-info__cart-btn:hover & { transform: translateX(4px); }
   }
+
+  &__wish-icon { font-size: 14px; }
 
   // ── Social links ───────────────────────────────────────────
 
