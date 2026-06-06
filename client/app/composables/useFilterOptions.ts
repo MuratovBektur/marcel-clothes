@@ -2,8 +2,7 @@ interface FilterOptions {
   materials: string[];
   colors: string[];
   sizes: string[];
-  countries: string[];
-  brands: string[];
+  types: string[];
 }
 
 export const useFilterOptions = () => {
@@ -18,8 +17,7 @@ export const useFilterOptions = () => {
   const materials = computed(() => data.value?.materials ?? []);
   const colors = computed(() => data.value?.colors ?? []);
   const sizes = computed(() => data.value?.sizes ?? []);
-  const countries = computed(() => data.value?.countries ?? []);
-  const brands = computed(() => data.value?.brands ?? []);
+  const types = computed(() => data.value?.types ?? []);
 
-  return { materials, colors, sizes, countries, brands, pending };
+  return { materials, colors, sizes, types, pending };
 };

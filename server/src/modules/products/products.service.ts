@@ -1,8 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Product } from '../../entities/product.entity';
-import { MATERIALS, COLORS, SIZES } from '../telegram-bot/constants';
+import { MATERIALS, COLORS, SUIT_TYPES, SIZES } from '../telegram-bot/constants';
+
+function readBotOptions(): { suitTypes: string[]; materials: string[]; colors: string[]; sizes: string[] } {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'custom-options.json'), 'utf-8'));
+  } catch {
+    return { suitTypes: [...SUIT_TYPES], materials: [...MATERIALS], colors: [...COLORS], sizes: [...SIZES.default] };
+  }
+}
 
 @Injectable()
 export class ProductsService {
@@ -21,7 +31,7 @@ export class ProductsService {
     const merge = (preset: string[], db: string[]) =>
       [...new Set([...preset, ...db.filter(Boolean)])];
 
-    const [materialsRaw, colorsRaw, sizesRaw] = await Promise.all([
+    const results = await Promise.allSettled([
       this.repo.query(
         `SELECT DISTINCT jsonb_array_elements_text(materials) AS val FROM products WHERE materials IS NOT NULL`,
       ),
@@ -31,15 +41,21 @@ export class ProductsService {
       this.repo.query(
         `SELECT DISTINCT jsonb_array_elements_text(sizes) AS val FROM products WHERE sizes IS NOT NULL`,
       ),
+      this.repo.query(
+        `SELECT DISTINCT "type" AS val FROM products WHERE "type" IS NOT NULL AND "type" != ''`,
+      ),
     ]);
 
+    const rows = (i: number): any[] =>
+      results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<any[]>).value : [];
+
+    const botOptions = readBotOptions();
+
     return {
-      materials: merge(MATERIALS, (materialsRaw as any[]).map((r) => r.val)),
-      colors: merge(COLORS, (colorsRaw as any[]).map((r) => r.val)),
-      sizes: merge(
-        [...SIZES.default, ...SIZES.shoes, ...SIZES.kids],
-        (sizesRaw as any[]).map((r) => r.val),
-      ),
+      materials: merge(botOptions.materials, rows(0).map((r) => r.val)),
+      colors: merge(botOptions.colors, rows(1).map((r) => r.val)),
+      sizes: merge(botOptions.sizes, rows(2).map((r) => r.val)),
+      types: merge(botOptions.suitTypes, rows(3).map((r) => r.val)),
     };
   }
 

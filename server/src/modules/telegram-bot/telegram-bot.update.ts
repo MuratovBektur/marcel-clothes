@@ -33,8 +33,12 @@ export class TelegramBotUpdate implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.bot.telegram.deleteMyCommands({});
-    await this.bot.telegram.setMyCommands(BOT_COMMANDS);
+    try {
+      await this.bot.telegram.deleteMyCommands({});
+      await this.bot.telegram.setMyCommands(BOT_COMMANDS);
+    } catch (err) {
+      console.warn('[TelegramBot] Could not register commands (Telegram unreachable):', (err as Error).message);
+    }
   }
 
   // ─── Старт ────────────────────────────────────────────────────────────────────
