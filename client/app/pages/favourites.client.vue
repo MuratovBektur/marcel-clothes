@@ -1,5 +1,6 @@
 <template>
   <div class="favs-page">
+    <div class="favs-page__container">
     <!-- Лоадер -->
     <Transition name="loader-fade">
       <div v-if="!isFavsHydrated" class="favs-loader" aria-label="Загрузка">
@@ -68,6 +69,7 @@
         </div>
       </div>
     </Transition>
+    </div>
 
     <div class="toast" :class="{ 'toast--on': toastVisible }">{{ toastMsg }}</div>
   </div>
@@ -187,9 +189,14 @@ function showToast(msg: string) {
 }
 
 .favs-page {
-  padding: 0 48px 80px;
   min-height: calc(100vh - 64px);
   position: relative;
+
+  &__container {
+    max-width: $container-max-width;
+    margin: 0 auto;
+    padding: 0 48px 80px;
+  }
 
   &__header {
     display: flex;
@@ -409,7 +416,9 @@ function showToast(msg: string) {
   }
 
   @media (max-width: 1100px) {
-    padding-inline: 28px;
+    &__container {
+      padding-inline: 28px;
+    }
     &__grid {
       grid-template-columns: repeat(3, 1fr);
     }
@@ -433,7 +442,9 @@ function showToast(msg: string) {
   }
 
   @media (max-width: 768px) {
-    padding-inline: 16px;
+    &__container {
+      padding-inline: 16px;
+    }
     &__title {
       font-size: 48px;
     }
