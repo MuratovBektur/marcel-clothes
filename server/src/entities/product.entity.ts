@@ -13,8 +13,11 @@ export class Product {
   @Column()
   type!: string;
 
-  @Column()
-  price!: string;
+  @Column({ type: 'text', name: 'wholesale_price', nullable: true, default: null })
+  wholesalePrice!: string | null;
+
+  @Column({ type: 'text', name: 'retail_price', nullable: true, default: null })
+  retailPrice!: string | null;
 
   @Column('jsonb')
   materials!: string[];
@@ -27,6 +30,9 @@ export class Product {
 
   @Column({ type: 'text', nullable: true })
   description!: string | null;
+
+  @Column({ type: 'text', name: 'additional_description', nullable: true, default: null })
+  additionalDescription!: string | null;
 
   @Column('jsonb')
   photos!: string[];

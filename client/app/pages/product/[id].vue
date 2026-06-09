@@ -64,7 +64,7 @@ useSeoMeta({
     : 'Товар'),
   description: computed(() => {
     if (!product.value) return '';
-    const parts = [product.value.type, product.value.gender, product.value.category, product.value.price].filter(Boolean);
+    const parts = [product.value.type, product.value.gender, product.value.category, product.value.retailPrice].filter(Boolean);
     const base = `${parts.join(' · ')} — купить в Marsel, Дордой, Бишкек.`;
     return product.value.description
       ? `${product.value.description} ${base}`
@@ -75,7 +75,7 @@ useSeoMeta({
     : 'Marsel'),
   ogDescription: computed(() => {
     if (!product.value) return '';
-    const parts = [product.value.type, product.value.gender, product.value.category, product.value.price].filter(Boolean);
+    const parts = [product.value.type, product.value.gender, product.value.category, product.value.retailPrice].filter(Boolean);
     const base = `${parts.join(' · ')} — купить в Marsel, Дордой, Бишкек.`;
     return product.value.description
       ? `${product.value.description} ${base}`

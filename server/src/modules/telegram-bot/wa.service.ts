@@ -250,7 +250,7 @@ export class WaService implements OnModuleInit, OnModuleDestroy {
 
     return (
       `Тип: ${p.type}\n` +
-      `Цена: ${p.price}\n` +
+      `Цена: ${p.retailPrice ?? ''}\n` +
       `Материалы: ${(p.materials ?? []).join(', ')}\n` +
       `Цвета: ${(p.colors ?? []).join(', ')}\n` +
       `Размеры: ${(p.sizes ?? []).join(', ')}\n` +

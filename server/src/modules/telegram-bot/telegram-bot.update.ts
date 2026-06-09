@@ -692,7 +692,7 @@ export class TelegramBotUpdate implements OnModuleInit {
       return;
     }
     await ctx.editMessageCaption(
-      `🗑 *Удалить товар?*\n\n👔 ${product.type}\n💰 ${product.price}`,
+      `🗑 *Удалить товар?*\n\n👔 ${product.type}\n💰 Опт: ${product.wholesalePrice ?? '—'} | Розница: ${product.retailPrice ?? '—'}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -740,7 +740,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     await ctx.answerCbQuery();
     if (!product) return;
     await ctx.editMessageCaption(
-      `🗑 *Удалить товар?*\n\n👔 ${product.type}\n💰 ${product.price}`,
+      `🗑 *Удалить товар?*\n\n👔 ${product.type}\n💰 Опт: ${product.wholesalePrice ?? '—'} | Розница: ${product.retailPrice ?? '—'}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -779,7 +779,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     const caption =
       `✅ *Товар добавлен!*\n\n` +
       `👔 *Тип:* ${p.type}\n` +
-      `💰 *Цена:* ${p.price}\n` +
+      `💰 *Цена оптом:* ${p.wholesalePrice ?? '—'}\n💵 *Цена в розницу:* ${p.retailPrice ?? '—'}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
       (p.description ? `📝 *Описание:* ${this.truncDesc(p.description)}\n` : '') +
@@ -788,7 +788,7 @@ export class TelegramBotUpdate implements OnModuleInit {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         [
-          Markup.button.callback('✏️ Изменить карточку', `edit_product:${p.id}`),
+          Markup.button.callback('✏️ Редактировать', `edit_product:${p.id}`),
           Markup.button.callback('🗑 Удалить', `del_ask_new:${p.id}`),
         ],
         [Markup.button.callback('📢 Опубликовать', `publish:${p.id}`)],
@@ -886,7 +886,7 @@ export class TelegramBotUpdate implements OnModuleInit {
 
     const caption =
       `👔 *Тип:* ${p.type}\n` +
-      `💰 *Цена:* ${p.price}\n` +
+      `💰 *Цена оптом:* ${p.wholesalePrice ?? '—'}\n💵 *Цена в розницу:* ${p.retailPrice ?? '—'}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
       (p.description ? `📝 *Описание:* ${this.truncDesc(p.description)}\n` : '') +

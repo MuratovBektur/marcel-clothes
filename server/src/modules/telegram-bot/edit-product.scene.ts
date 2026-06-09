@@ -15,7 +15,7 @@ import {
   SUIT_TYPES,
 } from './constants';
 
-const PRICE_RE = /^\d+(\.\d+)?\s+(сом|рубль|доллар)$/i;
+const PRICE_RE = /^\d+(\.\d+)?\s+(сом\p{L}*|рубл\p{L}*|доллар\p{L}*)$/iu;
 const BACK_TEXT = '◀️ Назад';
 const SKIP_TEXT = '⏭ Пропустить';
 const DONE_TEXT = '✅ Готово';
@@ -28,7 +28,7 @@ const E_SIZE_CUSTOM_CB = 'ef_size_custom';
 
 interface EditState {
   productId: string;
-  editingField: 'price' | 'description' | 'photo' | 'extra_photos' | null;
+  editingField: 'wholesalePrice' | 'retailPrice' | 'description' | 'additionalDescription' | 'photo' | 'extra_photos' | null;
   editingMulti: 'materials' | 'colors' | 'sizes' | null;
   selectedItems: string[];
   waitingForCustom: 'material' | 'color' | 'size' | null;
@@ -141,13 +141,17 @@ export class EditProductScene {
     const text =
       `✏️ *Редактирование товара*\n\n` +
       `👔 *Тип:* ${product.type}\n` +
-      `💰 *Цена:* ${product.price}\n` +
+      `💰 *Цена оптом:* ${product.wholesalePrice ?? '—'}\n` +
+      `💵 *Цена в розницу:* ${product.retailPrice ?? '—'}\n` +
       `🧵 *Материалы:* ${product.materials.join(', ')}\n` +
       `🎨 *Цвета:* ${product.colors.join(', ')}\n` +
       `📏 *Размеры:* ${product.sizes.join(', ')}\n` +
       (product.description
         ? `📝 *Описание:* ${product.description}\n`
         : '📝 Описание: —\n') +
+      (product.additionalDescription
+        ? `📋 *Доп. описание:* ${product.additionalDescription}\n`
+        : '📋 Доп. описание: —\n') +
       `📷 *Доп. фото:* ${product.extraPhotos?.length ?? 0} шт.\n` +
       `\n_Выберите поле для изменения:_`;
 
@@ -155,7 +159,10 @@ export class EditProductScene {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         [Markup.button.callback('👔 Тип', 'ef:type')],
-        [Markup.button.callback('💰 Цена', 'ef:price')],
+        [
+          Markup.button.callback('💰 Цена оптом', 'ef:wholesalePrice'),
+          Markup.button.callback('💵 Цена в розницу', 'ef:retailPrice'),
+        ],
         [
           Markup.button.callback('🧵 Материалы', 'ef:materials'),
           Markup.button.callback('🎨 Цвета', 'ef:colors'),
@@ -164,6 +171,7 @@ export class EditProductScene {
           Markup.button.callback('📏 Размеры', 'ef:sizes'),
           Markup.button.callback('📝 Описание', 'ef:description'),
         ],
+        [Markup.button.callback('📋 Доп. описание', 'ef:additionalDescription')],
         [
           Markup.button.callback('📸 Главное фото', 'ef:photo'),
           Markup.button.callback('📷 Доп. фото', 'ef:extra_photos'),
@@ -260,12 +268,25 @@ export class EditProductScene {
 
   // ═══ Цена ══════════════════════════════════════════════════════════════════════
 
-  @Action('ef:price')
-  async onEditPrice(@Ctx() ctx: any) {
-    getState(ctx).editingField = 'price';
+  @Action('ef:wholesalePrice')
+  async onEditWholesalePrice(@Ctx() ctx: any) {
+    getState(ctx).editingField = 'wholesalePrice';
     await ctx.answerCbQuery();
     await ctx.reply(
-      '💰 Введите новую цену:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
+      '💰 Введите новую цену оптом:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
+      {
+        parse_mode: 'Markdown',
+        ...Markup.keyboard([[BACK_TEXT]]).resize(),
+      },
+    );
+  }
+
+  @Action('ef:retailPrice')
+  async onEditRetailPrice(@Ctx() ctx: any) {
+    getState(ctx).editingField = 'retailPrice';
+    await ctx.answerCbQuery();
+    await ctx.reply(
+      '💵 Введите новую цену в розницу:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
       {
         parse_mode: 'Markdown',
         ...Markup.keyboard([[BACK_TEXT]]).resize(),
@@ -413,6 +434,16 @@ export class EditProductScene {
     );
   }
 
+  @Action('ef:additionalDescription')
+  async onEditAdditionalDescription(@Ctx() ctx: any) {
+    getState(ctx).editingField = 'additionalDescription';
+    await ctx.answerCbQuery();
+    await ctx.reply(
+      '📋 Введите дополнительное описание или нажмите "Пропустить" для удаления:',
+      { ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT]]).resize() },
+    );
+  }
+
   // ═══ Главное фото ══════════════════════════════════════════════════════════════
 
   @Action('ef:photo')
@@ -513,6 +544,16 @@ export class EditProductScene {
       return;
     }
 
+    // Пропустить доп. описание
+    if (text === SKIP_TEXT && state.editingField === 'additionalDescription') {
+      await this.productsService.update(state.productId, { additionalDescription: null });
+      state.editingField = null;
+      await removeReplyKeyboard(ctx);
+      await ctx.reply('✅ Дополнительное описание удалено!');
+      await this.showEditMenu(ctx);
+      return;
+    }
+
     // Свой вариант multi-select
     if (state.waitingForCustom) {
       const items = text.split(',').map((s) => s.trim()).filter(Boolean);
@@ -539,8 +580,8 @@ export class EditProductScene {
       return;
     }
 
-    // Цена
-    if (state.editingField === 'price') {
+    // Цена оптом
+    if (state.editingField === 'wholesalePrice') {
       if (!PRICE_RE.test(text)) {
         await ctx.reply(
           '⚠️ Неверный формат. Введите цену и валюту:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
@@ -548,10 +589,27 @@ export class EditProductScene {
         );
         return;
       }
-      await this.productsService.update(state.productId, { price: text });
+      await this.productsService.update(state.productId, { wholesalePrice: text });
       state.editingField = null;
       await removeReplyKeyboard(ctx);
-      await ctx.reply('✅ Цена обновлена!');
+      await ctx.reply('✅ Цена оптом обновлена!');
+      await this.showEditMenu(ctx);
+      return;
+    }
+
+    // Цена в розницу
+    if (state.editingField === 'retailPrice') {
+      if (!PRICE_RE.test(text)) {
+        await ctx.reply(
+          '⚠️ Неверный формат. Введите цену и валюту:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
+          { parse_mode: 'Markdown' },
+        );
+        return;
+      }
+      await this.productsService.update(state.productId, { retailPrice: text });
+      state.editingField = null;
+      await removeReplyKeyboard(ctx);
+      await ctx.reply('✅ Цена в розницу обновлена!');
       await this.showEditMenu(ctx);
       return;
     }
@@ -562,6 +620,16 @@ export class EditProductScene {
       state.editingField = null;
       await removeReplyKeyboard(ctx);
       await ctx.reply('✅ Описание обновлено!');
+      await this.showEditMenu(ctx);
+      return;
+    }
+
+    // Доп. описание
+    if (state.editingField === 'additionalDescription') {
+      await this.productsService.update(state.productId, { additionalDescription: text });
+      state.editingField = null;
+      await removeReplyKeyboard(ctx);
+      await ctx.reply('✅ Дополнительное описание обновлено!');
       await this.showEditMenu(ctx);
       return;
     }

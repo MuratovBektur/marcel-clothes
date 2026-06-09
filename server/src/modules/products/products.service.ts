@@ -105,10 +105,10 @@ export class ProductsService {
       [effectivePriceMin, effectivePriceMax] = [effectivePriceMax, effectivePriceMin];
     }
     if (effectivePriceMin != null) {
-      qb.andWhere(`CAST(SPLIT_PART(p.price, ' ', 1) AS NUMERIC) >= :priceMin`, { priceMin: effectivePriceMin });
+      qb.andWhere(`CAST(SPLIT_PART(COALESCE(p.retail_price, '0'), ' ', 1) AS NUMERIC) >= :priceMin`, { priceMin: effectivePriceMin });
     }
     if (effectivePriceMax != null) {
-      qb.andWhere(`CAST(SPLIT_PART(p.price, ' ', 1) AS NUMERIC) <= :priceMax`, { priceMax: effectivePriceMax });
+      qb.andWhere(`CAST(SPLIT_PART(COALESCE(p.retail_price, '0'), ' ', 1) AS NUMERIC) <= :priceMax`, { priceMax: effectivePriceMax });
     }
 
     const [data, total] = await qb

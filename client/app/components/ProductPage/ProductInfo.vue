@@ -10,12 +10,13 @@
 
     <!-- Price -->
     <div class="product-info__price-block">
-      <div class="product-info__price">{{ product.price }}</div>
+      <div class="product-info__price">{{ product.retailPrice }}</div>
     </div>
 
     <!-- Description -->
-    <div v-if="product.description" class="product-info__desc">
-      <p class="product-info__desc-line" style="white-space: pre-line">{{ product.description }}</p>
+    <div v-if="product.description || product.additionalDescription" class="product-info__desc">
+      <p v-if="product.description" class="product-info__desc-line" style="white-space: pre-line">{{ product.description }}</p>
+      <p v-if="product.additionalDescription" class="product-info__desc-line" style="white-space: pre-line; margin-top: 8px">{{ product.additionalDescription }}</p>
     </div>
 
     <!-- Specs -->
@@ -93,7 +94,7 @@ function addToCart() {
   add({
     productId:   props.product.id,
     productType: props.product.type,
-    price:       props.product.price,
+    price:       props.product.retailPrice ?? '',
     photo:       props.product.photos[0] ?? '',
     color:       '',
     size:        '',

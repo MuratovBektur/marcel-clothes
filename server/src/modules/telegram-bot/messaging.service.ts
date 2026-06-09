@@ -21,11 +21,12 @@ export class TgGroupService {
 
     return (
       `<b>Тип:</b> ${esc(p.type)}\n` +
-      `<b>Цена:</b> ${esc(p.price)}\n` +
+      `<b>Цена:</b> ${esc(p.retailPrice ?? '')}\n` +
       `<b>Материалы:</b> ${(p.materials ?? []).map(esc).join(', ')}\n` +
       `<b>Цвета:</b> ${(p.colors ?? []).map(esc).join(', ')}\n` +
       `<b>Размеры:</b> ${(p.sizes ?? []).map(esc).join(', ')}\n` +
       (p.description ? `<b>Описание:</b> ${esc(p.description)}\n` : '') +
+      (p.additionalDescription ? `<b>Доп. описание:</b> ${esc(p.additionalDescription)}\n` : '') +
       `\n${hashtags}`
     );
   }

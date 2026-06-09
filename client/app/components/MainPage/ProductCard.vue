@@ -27,7 +27,7 @@
       <div class="product-card__name">{{ product.type }}{{ product.brand ? ' · ' + product.brand : '' }}</div>
       <div class="product-card__sub">{{ product.gender }} · {{ product.category }}</div>
       <div class="product-card__footer">
-        <div class="product-card__price">{{ product.price }}</div>
+        <div class="product-card__price">{{ product.retailPrice }}</div>
         <div v-if="product.colors?.length" class="product-card__colors">
           <span v-for="c in product.colors.slice(0, 4)" :key="c" class="color-dot"
             :style="{ background: colorToHex(c) }" :title="c" />

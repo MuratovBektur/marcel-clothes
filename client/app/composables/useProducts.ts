@@ -7,11 +7,13 @@ export interface Product {
   type: string;
   brand: string | null;
   country: string;
-  price: string;
+  wholesalePrice: string | null;
+  retailPrice: string | null;
   materials: string[];
   colors: string[];
   sizes: string[];
   description: string | null;
+  additionalDescription: string | null;
   photos: string[];
   extraPhotos: string[];
   isPublished: boolean;
