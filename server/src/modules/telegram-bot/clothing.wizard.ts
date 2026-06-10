@@ -38,6 +38,12 @@ const DONE_TEXT = '✅ Готово';
 const SKIP_TEXT = '⏭ Пропустить';
 const CANCEL_TEXT = '❌ Отмена';
 
+// Переиспользуемые клавиатуры — прикрепляются к КАЖДОМУ ответу на шаге,
+// иначе на iOS Telegram сворачивает кастомную клавиатуру (например, после
+// открытия галереи для фото) и не показывает её снова без reply_markup.
+const mainPhotoKeyboard = Markup.keyboard([[BACK_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize();
+const extraPhotosKeyboard = Markup.keyboard([[BACK_TEXT], [SKIP_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize();
+
 // ─── Cursor → шаг ─────────────────────────────────────────────────────────────
 // 0  = Тип              (inline, callback type:0..N)
 // 1  = Цена оптом       (text через WizardStep(1))
@@ -549,7 +555,10 @@ export class ClothingWizard {
     }
 
     if (msg?.text === DONE_TEXT) {
-      if (!state.mainPhoto) { await ctx.reply('📸 Сначала отправьте главное фото.'); return; }
+      if (!state.mainPhoto) {
+        await ctx.reply('📸 Сначала отправьте главное фото.', mainPhotoKeyboard);
+        return;
+      }
       state.submission.photos = [state.mainPhoto];
       ctx.wizard.next();
       await sendDescriptionPrompt(ctx);
@@ -557,9 +566,15 @@ export class ClothingWizard {
     }
 
     const photo = msg?.photo;
-    if (!photo) { await ctx.reply(`Пожалуйста, отправьте фото или нажмите "${DONE_TEXT}".`); return; }
+    if (!photo) {
+      await ctx.reply(`Пожалуйста, отправьте фото или нажмите "${DONE_TEXT}".`, mainPhotoKeyboard);
+      return;
+    }
     state.mainPhoto = photo[photo.length - 1].file_id as string;
-    await ctx.reply(`✅ Главное фото добавлено. Нажмите *"${DONE_TEXT}"* для продолжения.`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ Главное фото добавлено. Нажмите *"${DONE_TEXT}"* для продолжения.`, {
+      parse_mode: 'Markdown',
+      ...mainPhotoKeyboard,
+    });
   }
 
   // Шаг 7: Описание
@@ -653,13 +668,16 @@ export class ClothingWizard {
     }
 
     const photo = msg?.photo;
-    if (!photo) { await ctx.reply(`Отправьте фото или нажмите "${SKIP_TEXT}".`); return; }
+    if (!photo) {
+      await ctx.reply(`Отправьте фото или нажмите "${SKIP_TEXT}".`, extraPhotosKeyboard);
+      return;
+    }
     if (state.extraPhotos.length >= MAX_EXTRA_PHOTOS) {
-      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} фото. Нажмите "${DONE_TEXT}" для завершения.`);
+      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} фото. Нажмите "${DONE_TEXT}" для завершения.`, extraPhotosKeyboard);
       return;
     }
     state.extraPhotos.push(photo[photo.length - 1].file_id as string);
-    await ctx.reply(`✅ Фото добавлено (${state.extraPhotos.length}/${MAX_EXTRA_PHOTOS}). Ещё или "${DONE_TEXT}".`);
+    await ctx.reply(`✅ Фото добавлено (${state.extraPhotos.length}/${MAX_EXTRA_PHOTOS}). Ещё или "${DONE_TEXT}".`, extraPhotosKeyboard);
   }
 
   // ─── Показать шаг по номеру (навигация Назад) ─────────────────────────────────
@@ -842,7 +860,7 @@ async function sendSizesKeyboard(ctx: any, items: string[], selected: string[]) 
 async function sendMainPhotoPrompt(ctx: any) {
   await ctx.reply(
     '📸 *Шаг 7 из 10* — Отправьте главное фото товара:\n_Одно фото_',
-    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize() },
+    { parse_mode: 'Markdown', ...mainPhotoKeyboard },
   );
 }
 
@@ -863,7 +881,7 @@ async function sendAdditionalDescriptionPrompt(ctx: any) {
 async function sendExtraPhotosPrompt(ctx: any) {
   await ctx.reply(
     `📷 *Шаг 10 из 10* — Дополнительные фото (до ${MAX_EXTRA_PHOTOS}):\n_Необязательно_`,
-    { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize() },
+    { parse_mode: 'Markdown', ...extraPhotosKeyboard },
   );
 }
 
