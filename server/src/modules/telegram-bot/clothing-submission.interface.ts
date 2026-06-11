@@ -1,4 +1,5 @@
 export interface ClothingSubmission {
+  gender: string;
   type: string;
   wholesalePrice: string;
   retailPrice: string;

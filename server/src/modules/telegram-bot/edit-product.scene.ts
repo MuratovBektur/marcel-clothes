@@ -13,6 +13,7 @@ import {
   MAX_EXTRA_PHOTOS,
   SIZES,
   SUIT_TYPES,
+  WIZARD_GENDERS,
 } from './constants';
 
 const PRICE_RE = /^\d+(\.\d+)?\s+(сом\p{L}*|рубл\p{L}*|доллар\p{L}*)$/iu;
@@ -33,6 +34,7 @@ interface EditState {
   selectedItems: string[];
   waitingForCustom: 'material' | 'color' | 'size' | null;
   editingType: boolean;
+  editingGender: boolean;
   newExtraPhotos: string[];
 }
 
@@ -117,6 +119,7 @@ export class EditProductScene {
       selectedItems: [],
       waitingForCustom: null,
       editingType: false,
+      editingGender: false,
       newExtraPhotos: [],
     } satisfies EditState);
 
@@ -132,6 +135,7 @@ export class EditProductScene {
     state.selectedItems = [];
     state.waitingForCustom = null;
     state.editingType = false;
+    state.editingGender = false;
     state.newExtraPhotos = [];
 
     if (!product) {
@@ -140,6 +144,7 @@ export class EditProductScene {
 
     const text =
       `✏️ *Редактирование товара*\n\n` +
+      `🚻 *Пол:* ${product.gender ?? '—'}\n` +
       `👔 *Тип:* ${product.type}\n` +
       `💰 *Цена оптом:* ${product.wholesalePrice ?? '—'}\n` +
       `💵 *Цена в розницу:* ${product.retailPrice ?? '—'}\n` +
@@ -158,6 +163,7 @@ export class EditProductScene {
     await ctx.reply(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
+        [Markup.button.callback('🚻 Пол', 'ef:gender')],
         [Markup.button.callback('👔 Тип', 'ef:type')],
         [
           Markup.button.callback('💰 Цена оптом', 'ef:wholesalePrice'),
@@ -237,8 +243,33 @@ export class EditProductScene {
     state.selectedItems = [];
     state.waitingForCustom = null;
     state.editingType = false;
+    state.editingGender = false;
     state.newExtraPhotos = [];
     await ctx.answerCbQuery('◀️');
+    await this.showEditMenu(ctx);
+  }
+
+  // ═══ Пол ══════════════════════════════════════════════════════════════════════
+
+  @Action('ef:gender')
+  async onEditGender(@Ctx() ctx: any) {
+    const state = getState(ctx);
+    state.editingGender = true;
+    await ctx.answerCbQuery();
+    await this.sendGenderKeyboard(ctx);
+  }
+
+  @Action(/^egender:(\d+)$/)
+  async onGenderSelect(@Ctx() ctx: any) {
+    const state = getState(ctx);
+    if (!state.editingGender) { await ctx.answerCbQuery(); return; }
+    const idx = parseInt((ctx.callbackQuery.data as string).replace('egender:', ''), 10);
+    const gender = WIZARD_GENDERS[idx];
+    if (!gender) { await ctx.answerCbQuery(); return; }
+    await this.productsService.update(state.productId, { gender });
+    state.editingGender = false;
+    await ctx.answerCbQuery('✅ Сохранено!');
+    await ctx.reply('✅ Пол обновлён!');
     await this.showEditMenu(ctx);
   }
 
@@ -511,6 +542,7 @@ export class EditProductScene {
       state.editingField = null;
       state.waitingForCustom = null;
       state.editingType = false;
+      state.editingGender = false;
       state.newExtraPhotos = [];
       await removeReplyKeyboard(ctx);
       await this.showEditMenu(ctx);
@@ -706,6 +738,16 @@ export class EditProductScene {
   }
 
   // ═══ Вспомогательные клавиатуры ════════════════════════════════════════════════
+
+  private async sendGenderKeyboard(ctx: any) {
+    const buttons = WIZARD_GENDERS.map((g, i) => [
+      Markup.button.callback(g, `egender:${i}`),
+    ]);
+    buttons.push([Markup.button.callback('◀️ Назад', BACK_CB)]);
+    await ctx.reply('🚻 Выберите пол:', {
+      ...Markup.inlineKeyboard(buttons),
+    });
+  }
 
   private async sendSuitTypeKeyboard(ctx: any) {
     const buttons = SUIT_TYPES.map((t, i) => [

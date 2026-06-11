@@ -778,6 +778,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     if (!p) return;
     const caption =
       `✅ *Товар добавлен!*\n\n` +
+      `🚻 *Пол:* ${p.gender ?? '—'}\n` +
       `👔 *Тип:* ${p.type}\n` +
       `💰 *Цена оптом:* ${p.wholesalePrice ?? '—'}\n💵 *Цена в розницу:* ${p.retailPrice ?? '—'}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
@@ -885,6 +886,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     const p = result.data[0];
 
     const caption =
+      `🚻 *Пол:* ${p.gender ?? '—'}\n` +
       `👔 *Тип:* ${p.type}\n` +
       `💰 *Цена оптом:* ${p.wholesalePrice ?? '—'}\n💵 *Цена в розницу:* ${p.retailPrice ?? '—'}\n` +
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +

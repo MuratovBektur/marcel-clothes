@@ -10,6 +10,9 @@ export class Product {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Column({ type: 'text', nullable: true, default: null })
+  gender!: string | null;
+
   @Column()
   type!: string;
 
