@@ -52,6 +52,9 @@ export class Product {
   @Column({ type: 'jsonb', nullable: true, default: null })
   publishedWaPost!: { groupId: string; keys: { remoteJid?: string; fromMe?: boolean; id?: string; participant?: string }[]; contentHash?: string } | null;
 
+  @Column({ type: 'text', name: 'showroom_product_id', nullable: true, default: null })
+  showroomProductId?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

@@ -18,6 +18,7 @@ import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
+import { ShowroomSyncService } from './showroom-sync.service';
 import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
 
 @Update()
@@ -30,6 +31,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     private readonly groupService: GroupService,
     private readonly tgGroupService: TgGroupService,
     private readonly waService: WaService,
+    private readonly showroomSync: ShowroomSyncService,
   ) {}
 
   async onModuleInit() {
@@ -719,6 +721,9 @@ export class TelegramBotUpdate implements OnModuleInit {
     if (product?.publishedWaPost) {
       await this.waService.deleteProductCard(ctx.from.id, product.publishedWaPost).catch(() => {});
     }
+    if (product?.showroomProductId) {
+      await this.showroomSync.remove(product.showroomProductId);
+    }
     await this.productsService.delete(productId);
     await ctx.answerCbQuery('✅ Удалено!');
     const { meta } = await this.productsService.findAll({ page: 1, limit: 1 });
@@ -764,6 +769,9 @@ export class TelegramBotUpdate implements OnModuleInit {
     }
     if (product?.publishedWaPost) {
       await this.waService.deleteProductCard(ctx.from.id, product.publishedWaPost).catch(() => {});
+    }
+    if (product?.showroomProductId) {
+      await this.showroomSync.remove(product.showroomProductId);
     }
     await this.productsService.delete(productId);
     await ctx.answerCbQuery('✅ Удалено!');

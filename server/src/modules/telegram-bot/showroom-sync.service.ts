@@ -18,12 +18,12 @@ export class ShowroomSyncService {
 
   constructor(private readonly http: HttpService) {}
 
-  async sync(product: Product): Promise<void> {
+  async sync(product: Product): Promise<string | null> {
     if (!SHOWROOM_API_URL || !SHOWROOM_API_KEY) {
       this.logger.warn(
         'SHOWROOM_API_URL/SHOWROOM_API_KEY не заданы — товар не отправлен в глобальный маркет',
       );
-      return;
+      return null;
     }
 
     const toAbsolute = (url: string) =>
@@ -35,8 +35,8 @@ export class ShowroomSyncService {
         .join('\n\n') || null;
 
     try {
-      await firstValueFrom(
-        this.http.post(
+      const { data } = await firstValueFrom(
+        this.http.post<{ id: string }>(
           SHOWROOM_API_URL,
           {
             gender: product.gender,
@@ -54,9 +54,28 @@ export class ShowroomSyncService {
           { headers: { 'x-api-key': SHOWROOM_API_KEY } },
         ),
       );
+      return data.id;
     } catch (err) {
       this.logger.error(
         `Не удалось отправить товар ${product.id} в глобальный маркет`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      return null;
+    }
+  }
+
+  async remove(showroomProductId: string): Promise<void> {
+    if (!SHOWROOM_API_URL || !SHOWROOM_API_KEY) return;
+
+    try {
+      await firstValueFrom(
+        this.http.delete(`${SHOWROOM_API_URL}/${showroomProductId}`, {
+          headers: { 'x-api-key': SHOWROOM_API_KEY },
+        }),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Не удалось удалить товар ${showroomProductId} из глобального маркета`,
         err instanceof Error ? err.stack : String(err),
       );
     }

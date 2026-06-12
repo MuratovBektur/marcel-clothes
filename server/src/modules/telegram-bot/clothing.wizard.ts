@@ -747,7 +747,11 @@ export class ClothingWizard {
       extraPhotos: extraPhotoUrls,
     });
 
-    await this.showroomSync.sync(saved);
+    const showroomProductId = await this.showroomSync.sync(saved);
+    if (showroomProductId) {
+      await this.productsService.update(saved.id, { showroomProductId });
+      saved.showroomProductId = showroomProductId;
+    }
 
     const descPreview = s.description
       ? (s.description.length > 300 ? s.description.slice(0, 300) + '…' : s.description)
