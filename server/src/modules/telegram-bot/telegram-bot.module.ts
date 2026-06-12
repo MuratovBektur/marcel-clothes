@@ -14,6 +14,7 @@ import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
+import { ShowroomSyncService } from './showroom-sync.service';
 import { BotUserGroup } from '../../entities/bot-user-group.entity';
 import { BotUserWaGroup } from '../../entities/bot-user-wa-group.entity';
 import { BotAuthorizedUser } from '../../entities/bot-authorized-user.entity';
@@ -46,6 +47,7 @@ if (!TELEGRAM_BOT_TOKEN) {
     GroupService,
     TgGroupService,
     WaService,
+    ShowroomSyncService,
   ],
 })
 export class TelegramBotModule {}

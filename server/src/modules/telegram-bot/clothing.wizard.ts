@@ -11,6 +11,7 @@ import { Markup } from 'telegraf';
 import { ProductsService } from '../products/products.service';
 import { FileStorageService } from './file-storage.service';
 import { CustomOptionsService } from './custom-options.service';
+import { ShowroomSyncService } from './showroom-sync.service';
 import {
   MAX_EXTRA_PHOTOS,
   CLOTHING_WIZARD_ID,
@@ -93,6 +94,7 @@ export class ClothingWizard {
     private readonly productsService: ProductsService,
     private readonly fileStorage: FileStorageService,
     private readonly customOptions: CustomOptionsService,
+    private readonly showroomSync: ShowroomSyncService,
   ) {}
 
   @SceneEnter()
@@ -744,6 +746,8 @@ export class ClothingWizard {
       photos: photoUrls,
       extraPhotos: extraPhotoUrls,
     });
+
+    await this.showroomSync.sync(saved);
 
     const descPreview = s.description
       ? (s.description.length > 300 ? s.description.slice(0, 300) + '…' : s.description)
