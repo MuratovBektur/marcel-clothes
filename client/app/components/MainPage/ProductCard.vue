@@ -25,7 +25,7 @@
 
     <div class="product-card__info">
       <div class="product-card__name">{{ product.type }}{{ product.brand ? ' · ' + product.brand : '' }}</div>
-      <div class="product-card__sub">{{ product.gender }} · {{ product.category }}</div>
+      <div class="product-card__sub">{{ product.gender?.join(', ') }} · {{ product.category }}</div>
       <div class="product-card__footer">
         <div class="product-card__price">{{ product.retailPrice }}</div>
         <div v-if="product.colors?.length" class="product-card__colors">

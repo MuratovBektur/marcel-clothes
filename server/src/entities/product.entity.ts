@@ -10,8 +10,9 @@ export class Product {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'text', nullable: true, default: null })
-  gender!: string | null;
+  // Выбранные возрастные категории (Для мальчиков / Для подростков / Для мужчин)
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  gender!: string[] | null;
 
   @Column()
   type!: string;

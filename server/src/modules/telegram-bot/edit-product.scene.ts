@@ -6,14 +6,14 @@ import { FileStorageService } from './file-storage.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import {
+  AGE_CATEGORIES,
+  buildAgeCategoryFields,
   COLORS,
   EDIT_SCENE_ID,
   MAIN_KEYBOARD,
   MATERIALS,
   MAX_EXTRA_PHOTOS,
-  SIZES,
   SUIT_TYPES,
-  WIZARD_GENDERS,
 } from './constants';
 
 const PRICE_RE = /^\d+(\.\d+)?\s+(сом\p{L}*|рубл\p{L}*|доллар\p{L}*)$/iu;
@@ -25,16 +25,15 @@ const BACK_CB = 'ef_back';
 const SAVE_CB = 'ef_save';
 const E_MAT_CUSTOM_CB = 'ef_mat_custom';
 const E_COL_CUSTOM_CB = 'ef_col_custom';
-const E_SIZE_CUSTOM_CB = 'ef_size_custom';
+const AGE_SAVE_CB = 'ef_age_save';
 
 interface EditState {
   productId: string;
   editingField: 'wholesalePrice' | 'retailPrice' | 'description' | 'additionalDescription' | 'photo' | 'extra_photos' | null;
-  editingMulti: 'materials' | 'colors' | 'sizes' | null;
+  editingMulti: 'materials' | 'colors' | 'ageCategory' | null;
   selectedItems: string[];
-  waitingForCustom: 'material' | 'color' | 'size' | null;
+  waitingForCustom: 'material' | 'color' | null;
   editingType: boolean;
-  editingGender: boolean;
   newExtraPhotos: string[];
 }
 
@@ -72,6 +71,20 @@ function multiSelectMarkup(
     Markup.button.callback('◀️ Назад', BACK_CB),
     ...(customCb ? [Markup.button.callback('✏️ Свой вариант', customCb)] : []),
     Markup.button.callback('💾 Сохранить', SAVE_CB),
+  ]);
+  return Markup.inlineKeyboard(rows);
+}
+
+function ageCategoryMultiSelectMarkup(selected: string[]) {
+  const rows = AGE_CATEGORIES.map((category) => [
+    Markup.button.callback(
+      selected.includes(category) ? `✅ ${category}` : category,
+      `eage:${category}`,
+    ),
+  ]);
+  rows.push([
+    Markup.button.callback('◀️ Назад', BACK_CB),
+    Markup.button.callback('💾 Сохранить', AGE_SAVE_CB),
   ]);
   return Markup.inlineKeyboard(rows);
 }
@@ -119,7 +132,6 @@ export class EditProductScene {
       selectedItems: [],
       waitingForCustom: null,
       editingType: false,
-      editingGender: false,
       newExtraPhotos: [],
     } satisfies EditState);
 
@@ -135,7 +147,6 @@ export class EditProductScene {
     state.selectedItems = [];
     state.waitingForCustom = null;
     state.editingType = false;
-    state.editingGender = false;
     state.newExtraPhotos = [];
 
     if (!product) {
@@ -144,7 +155,7 @@ export class EditProductScene {
 
     const text =
       `✏️ *Редактирование товара*\n\n` +
-      `🚻 *Пол:* ${product.gender ?? '—'}\n` +
+      `🚻 *Возрастная категория:* ${product.gender?.length ? product.gender.join(', ') : '—'}\n` +
       `👔 *Тип:* ${product.type}\n` +
       `💰 *Цена оптом:* ${product.wholesalePrice ?? '—'}\n` +
       `💵 *Цена в розницу:* ${product.retailPrice ?? '—'}\n` +
@@ -163,7 +174,7 @@ export class EditProductScene {
     await ctx.reply(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        [Markup.button.callback('🚻 Пол', 'ef:gender')],
+        [Markup.button.callback('🚻 Возрастная категория', 'ef:ageCategory')],
         [Markup.button.callback('👔 Тип', 'ef:type')],
         [
           Markup.button.callback('💰 Цена оптом', 'ef:wholesalePrice'),
@@ -173,10 +184,7 @@ export class EditProductScene {
           Markup.button.callback('🧵 Материалы', 'ef:materials'),
           Markup.button.callback('🎨 Цвета', 'ef:colors'),
         ],
-        [
-          Markup.button.callback('📏 Размеры', 'ef:sizes'),
-          Markup.button.callback('📝 Описание', 'ef:description'),
-        ],
+        [Markup.button.callback('📝 Описание', 'ef:description')],
         [Markup.button.callback('📋 Доп. описание', 'ef:additionalDescription')],
         [
           Markup.button.callback('📸 Главное фото', 'ef:photo'),
@@ -243,33 +251,49 @@ export class EditProductScene {
     state.selectedItems = [];
     state.waitingForCustom = null;
     state.editingType = false;
-    state.editingGender = false;
     state.newExtraPhotos = [];
     await ctx.answerCbQuery('◀️');
     await this.showEditMenu(ctx);
   }
 
-  // ═══ Пол ══════════════════════════════════════════════════════════════════════
+  // ═══ Возрастная категория ═══════════════════════════════════════════════════════
 
-  @Action('ef:gender')
-  async onEditGender(@Ctx() ctx: any) {
+  @Action('ef:ageCategory')
+  async onEditAgeCategory(@Ctx() ctx: any) {
     const state = getState(ctx);
-    state.editingGender = true;
+    state.editingMulti = 'ageCategory';
+    const product = await this.productsService.findOne(state.productId);
+    state.selectedItems = [...(product?.gender ?? [])];
     await ctx.answerCbQuery();
-    await this.sendGenderKeyboard(ctx);
+    await ctx.reply('🚻 *Выберите возрастную категорию:*\n_Текущие отмечены ✅_', {
+      parse_mode: 'Markdown',
+      ...ageCategoryMultiSelectMarkup(state.selectedItems),
+    });
   }
 
-  @Action(/^egender:(\d+)$/)
-  async onGenderSelect(@Ctx() ctx: any) {
+  @Action(/^eage:(.+)/)
+  async onAgeCategoryToggle(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (!state.editingGender) { await ctx.answerCbQuery(); return; }
-    const idx = parseInt((ctx.callbackQuery.data as string).replace('egender:', ''), 10);
-    const gender = WIZARD_GENDERS[idx];
-    if (!gender) { await ctx.answerCbQuery(); return; }
-    await this.productsService.update(state.productId, { gender });
-    state.editingGender = false;
+    if (state.editingMulti !== 'ageCategory') { await ctx.answerCbQuery(); return; }
+    toggle(state.selectedItems, (ctx.callbackQuery.data as string).replace('eage:', ''));
+    await ctx.answerCbQuery();
+    await ctx.editMessageReplyMarkup(
+      ageCategoryMultiSelectMarkup(state.selectedItems).reply_markup,
+    );
+  }
+
+  @Action(AGE_SAVE_CB)
+  async onSaveAgeCategory(@Ctx() ctx: any) {
+    const state = getState(ctx);
+    if (state.editingMulti !== 'ageCategory') { await ctx.answerCbQuery(); return; }
+    if (!state.selectedItems.length) {
+      await ctx.answerCbQuery('Выберите хотя бы одну категорию!', { show_alert: true });
+      return;
+    }
+    const { gender, sizes } = buildAgeCategoryFields(state.selectedItems);
+    await this.productsService.update(state.productId, { gender, sizes });
     await ctx.answerCbQuery('✅ Сохранено!');
-    await ctx.reply('✅ Пол обновлён!');
+    await ctx.reply('✅ Возрастная категория и размеры обновлены!');
     await this.showEditMenu(ctx);
   }
 
@@ -399,55 +423,18 @@ export class EditProductScene {
     });
   }
 
-  // ═══ Размеры ═══════════════════════════════════════════════════════════════════
-
-  @Action('ef:sizes')
-  async onEditSizes(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    state.editingMulti = 'sizes';
-    const product = await this.productsService.findOne(state.productId);
-    state.selectedItems = [...(product?.sizes ?? [])];
-    await ctx.answerCbQuery();
-    await ctx.reply('📏 *Выберите размеры:*\n_Текущие отмечены ✅_', {
-      parse_mode: 'Markdown',
-      ...multiSelectMarkup(SIZES.default, state.selectedItems, 'esize', E_SIZE_CUSTOM_CB),
-    });
-  }
-
-  @Action(/^esize:(.+)/)
-  async onSizeToggle(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    if (state.editingMulti !== 'sizes') { await ctx.answerCbQuery(); return; }
-    toggle(state.selectedItems, (ctx.callbackQuery.data as string).replace('esize:', ''));
-    await ctx.answerCbQuery();
-    await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(SIZES.default, state.selectedItems, 'esize', E_SIZE_CUSTOM_CB).reply_markup,
-    );
-  }
-
-  @Action(E_SIZE_CUSTOM_CB)
-  async onSizeCustom(@Ctx() ctx: any) {
-    const state = getState(ctx);
-    if (state.editingMulti !== 'sizes') { await ctx.answerCbQuery(); return; }
-    state.waitingForCustom = 'size';
-    await ctx.answerCbQuery();
-    await ctx.reply('✏️ Введите свои варианты размеров через запятую:', {
-      ...Markup.keyboard([[BACK_TEXT]]).resize(),
-    });
-  }
-
-  // ─── Сохранить multi-select ────────────────────────────────────────────────────
+  // ─── Сохранить multi-select (материалы/цвета) ─────────────────────────────────
   @Action(SAVE_CB)
   async onSaveMulti(@Ctx() ctx: any) {
     const state = getState(ctx);
-    if (!state.editingMulti) { await ctx.answerCbQuery(); return; }
+    if (state.editingMulti !== 'materials' && state.editingMulti !== 'colors') { await ctx.answerCbQuery(); return; }
     if (!state.selectedItems.length) {
       await ctx.answerCbQuery('Выберите хотя бы один вариант!', { show_alert: true });
       return;
     }
     const field = state.editingMulti;
     await this.productsService.update(state.productId, { [field]: state.selectedItems });
-    const label = field === 'materials' ? 'Материалы' : field === 'colors' ? 'Цвета' : 'Размеры';
+    const label = field === 'materials' ? 'Материалы' : 'Цвета';
     await ctx.answerCbQuery('✅ Сохранено!');
     await ctx.reply(`✅ ${label} обновлены!`);
     await this.showEditMenu(ctx);
@@ -542,7 +529,6 @@ export class EditProductScene {
       state.editingField = null;
       state.waitingForCustom = null;
       state.editingType = false;
-      state.editingGender = false;
       state.newExtraPhotos = [];
       await removeReplyKeyboard(ctx);
       await this.showEditMenu(ctx);
@@ -602,9 +588,9 @@ export class EditProductScene {
       }
       state.waitingForCustom = null;
       await removeReplyKeyboard(ctx);
-      const prefix = state.editingMulti === 'materials' ? 'emat' : state.editingMulti === 'colors' ? 'ecol' : 'esize';
-      const customCb = state.editingMulti === 'materials' ? E_MAT_CUSTOM_CB : state.editingMulti === 'colors' ? E_COL_CUSTOM_CB : E_SIZE_CUSTOM_CB;
-      const list = state.editingMulti === 'materials' ? MATERIALS : state.editingMulti === 'colors' ? COLORS : SIZES.default;
+      const prefix = state.editingMulti === 'materials' ? 'emat' : 'ecol';
+      const customCb = state.editingMulti === 'materials' ? E_MAT_CUSTOM_CB : E_COL_CUSTOM_CB;
+      const list = state.editingMulti === 'materials' ? MATERIALS : COLORS;
       await ctx.reply(
         `✅ Добавлено: *${added.join(', ')}*\n\nВыберите ещё из списка или нажмите *Сохранить*`,
         { parse_mode: 'Markdown', ...multiSelectMarkup(list, state.selectedItems, prefix, customCb) },
@@ -738,16 +724,6 @@ export class EditProductScene {
   }
 
   // ═══ Вспомогательные клавиатуры ════════════════════════════════════════════════
-
-  private async sendGenderKeyboard(ctx: any) {
-    const buttons = WIZARD_GENDERS.map((g, i) => [
-      Markup.button.callback(g, `egender:${i}`),
-    ]);
-    buttons.push([Markup.button.callback('◀️ Назад', BACK_CB)]);
-    await ctx.reply('🚻 Выберите пол:', {
-      ...Markup.inlineKeyboard(buttons),
-    });
-  }
 
   private async sendSuitTypeKeyboard(ctx: any) {
     const buttons = SUIT_TYPES.map((t, i) => [

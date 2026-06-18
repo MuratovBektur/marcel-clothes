@@ -13,13 +13,17 @@ export class AddPriceAndDescriptionFields1749470400000 implements MigrationInter
     `);
 
     // Копируем старую цену в обе новые колонки, чтобы не потерять данные
-    await queryRunner.query(`
-      UPDATE "products"
-      SET
-        "wholesale_price" = "price",
-        "retail_price"    = "price"
-      WHERE "price" IS NOT NULL AND "price" != ''
-    `);
+    // (на части окружений колонки "price" уже не существует — таблица создана сразу по новой схеме)
+    const hasPriceColumn = await queryRunner.hasColumn('products', 'price');
+    if (hasPriceColumn) {
+      await queryRunner.query(`
+        UPDATE "products"
+        SET
+          "wholesale_price" = "price",
+          "retail_price"    = "price"
+        WHERE "price" IS NOT NULL AND "price" != ''
+      `);
+    }
 
     // Удаляем старую колонку price
     await queryRunner.query(`

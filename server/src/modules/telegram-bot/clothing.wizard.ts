@@ -16,7 +16,8 @@ import {
   MAX_EXTRA_PHOTOS,
   CLOTHING_WIZARD_ID,
   MAIN_KEYBOARD,
-  WIZARD_GENDERS,
+  AGE_CATEGORIES,
+  buildAgeCategoryFields,
 } from './constants';
 import { ClothingSubmission } from './clothing-submission.interface';
 
@@ -32,7 +33,6 @@ const CANCEL_ABORT_CB = 'wiz_cancel_abort';
 const TYPE_CUSTOM_CB = 'type_custom';
 const MAT_CUSTOM_CB = 'mat_custom';
 const COL_CUSTOM_CB = 'col_custom';
-const SIZE_CUSTOM_CB = 'size_custom';
 
 // ─── Reply keyboard labels ────────────────────────────────────────────────────
 const BACK_TEXT = '◀️ Назад';
@@ -47,26 +47,25 @@ const mainPhotoKeyboard = Markup.keyboard([[BACK_TEXT, DONE_TEXT], [CANCEL_TEXT]
 const extraPhotosKeyboard = Markup.keyboard([[BACK_TEXT], [SKIP_TEXT, DONE_TEXT], [CANCEL_TEXT]]).resize();
 
 // ─── Cursor → шаг ─────────────────────────────────────────────────────────────
-// 0  = Пол              (inline, callback gender:0..N)
-// 1  = Тип              (inline, callback type:0..N)
-// 2  = Цена оптом       (text через WizardStep(2))
-// 3  = Цена в розницу   (text через WizardStep(3))
-// 4  = Материалы        (inline, multi + text)
-// 5  = Цвета            (inline, multi + text)
-// 6  = Размеры          (inline, multi + text)
-// 7  = Главное фото     (WizardStep(7))
-// 8  = Описание         (WizardStep(8))
-// 9  = Доп. описание    (WizardStep(9))
-// 10 = Доп. фото        (WizardStep(10))
+// 0 = Возрастная категория (inline, multi, callback age:<категория>)
+// 1 = Тип                  (inline, callback type:0..N)
+// 2 = Цена оптом           (text через WizardStep(2))
+// 3 = Цена в розницу       (text через WizardStep(3))
+// 4 = Материалы            (inline, multi + text)
+// 5 = Цвета                (inline, multi + text)
+// 6 = Главное фото         (WizardStep(6))
+// 7 = Описание             (WizardStep(7))
+// 8 = Доп. описание        (WizardStep(8))
+// 9 = Доп. фото            (WizardStep(9))
 
 // ─── State ────────────────────────────────────────────────────────────────────
 interface WizardState {
   submission: Partial<ClothingSubmission>;
-  waitingForCustom: 'type' | 'material' | 'color' | 'size' | null;
+  waitingForCustom: 'type' | 'material' | 'color' | null;
   customStepMessageId: number | null;
+  selectedAgeCategories: string[];
   selectedMaterials: string[];
   selectedColors: string[];
-  selectedSizes: string[];
   mainPhoto: string | null;
   extraPhotos: string[];
 }
@@ -77,9 +76,9 @@ function getState(ctx: any): WizardState {
       submission: {},
       waitingForCustom: null,
       customStepMessageId: null,
+      selectedAgeCategories: [],
       selectedMaterials: [],
       selectedColors: [],
-      selectedSizes: [],
       mainPhoto: null,
       extraPhotos: [],
     } satisfies WizardState);
@@ -108,7 +107,7 @@ export class ClothingWizard {
       ctx.session.__scenes.state = {};
     }
     await removeReplyKeyboard(ctx);
-    const firstMsg = await sendGenderKeyboard(ctx, undefined);
+    const firstMsg = await sendAgeCategoryKeyboard(ctx, []);
     ctx.session.__wizFirstMsgId = firstMsg.message_id;
   }
 
@@ -140,18 +139,18 @@ export class ClothingWizard {
     await ctx.deleteMessage();
   }
 
-  // cursor 0 — Пол (callback_data = gender:<index>)
-  @Action(/^gender:(\d+)$/)
-  async onGenderSelect(@Ctx() ctx: any) {
+  // cursor 0 — Возрастная категория (toggle, callback_data = age:<категория>)
+  @Action(/^age:(.+)$/)
+  async onAgeCategoryToggle(@Ctx() ctx: any) {
     if (ctx.wizard.cursor !== 0) { await ctx.answerCbQuery(); return; }
-    const idx = parseInt((ctx.callbackQuery.data as string).replace('gender:', ''), 10);
-    const gender = WIZARD_GENDERS[idx];
-    if (!gender) { await ctx.answerCbQuery(); return; }
+    const category = (ctx.callbackQuery.data as string).replace('age:', '');
+    if (!AGE_CATEGORIES.includes(category)) { await ctx.answerCbQuery(); return; }
     const state = getState(ctx);
-    state.submission.gender = gender;
-    ctx.wizard.next();
-    await ctx.answerCbQuery(`✅ ${gender}`);
-    await sendSuitTypeKeyboard(ctx, this.customOptions.getOptions('suitTypes'), undefined);
+    toggle(state.selectedAgeCategories, category);
+    await ctx.answerCbQuery();
+    await ctx.editMessageReplyMarkup(
+      ageCategoryMarkup(state.selectedAgeCategories).reply_markup,
+    );
   }
 
   // cursor 1 — Тип костюма (callback_data = type:<index>)
@@ -218,31 +217,24 @@ export class ClothingWizard {
     );
   }
 
-  // cursor 6 — Размеры (toggle)
-  @Action(/^size:(.+)/)
-  async onSizeToggle(@Ctx() ctx: any) {
-    if (ctx.wizard.cursor !== 6) { await ctx.answerCbQuery(); return; }
-    const size = (ctx.callbackQuery.data as string).replace('size:', '');
-    const state = getState(ctx);
-    toggle(state.selectedSizes, size);
-    await ctx.answerCbQuery();
-    await ctx.editMessageReplyMarkup(
-      multiSelectMarkup(
-        this.customOptions.getOptions('sizes'),
-        state.selectedSizes,
-        'size',
-        SIZE_CUSTOM_CB,
-      ).reply_markup,
-    );
-  }
-
-  // ─── "✅ Готово" для multi-select (cursor 4, 5, 6) ───────────────────────────
+  // ─── "✅ Готово" для multi-select (cursor 0, 4, 5) ───────────────────────────
   @Action(DONE_CB)
   async onDone(@Ctx() ctx: any) {
     const cursor = ctx.wizard.cursor;
     const state = getState(ctx);
 
-    if (cursor === 4) {
+    if (cursor === 0) {
+      if (!state.selectedAgeCategories.length) {
+        await ctx.answerCbQuery('Выберите хотя бы одну возрастную категорию!', { show_alert: true });
+        return;
+      }
+      const { gender, sizes } = buildAgeCategoryFields(state.selectedAgeCategories);
+      state.submission.gender = gender;
+      state.submission.sizes = sizes;
+      ctx.wizard.next();
+      await ctx.answerCbQuery();
+      await sendSuitTypeKeyboard(ctx, this.customOptions.getOptions('suitTypes'), undefined);
+    } else if (cursor === 4) {
       if (!state.selectedMaterials.length) {
         await ctx.answerCbQuery('Выберите хотя бы один материал!', { show_alert: true });
         return;
@@ -259,26 +251,17 @@ export class ClothingWizard {
       state.submission.colors = [...state.selectedColors];
       ctx.wizard.next();
       await ctx.answerCbQuery();
-      await sendSizesKeyboard(ctx, this.customOptions.getOptions('sizes'), state.selectedSizes);
-    } else if (cursor === 6) {
-      if (!state.selectedSizes.length) {
-        await ctx.answerCbQuery('Выберите хотя бы один размер!', { show_alert: true });
-        return;
-      }
-      state.submission.sizes = [...state.selectedSizes];
-      ctx.wizard.next();
-      await ctx.answerCbQuery();
       await sendMainPhotoPrompt(ctx);
     } else {
       await ctx.answerCbQuery();
     }
   }
 
-  // ─── "◀️ Назад" для inline-шагов (cursor 4, 5, 6) ────────────────────────────
+  // ─── "◀️ Назад" для inline-шагов (cursor 4, 5) ────────────────────────────────
   @Action(BACK_CB)
   async onBackInline(@Ctx() ctx: any) {
     const cursor = ctx.wizard.cursor;
-    const inlineCursors = [4, 5, 6];
+    const inlineCursors = [4, 5];
     if (!inlineCursors.includes(cursor)) { await ctx.answerCbQuery(); return; }
     ctx.wizard.cursor = cursor - 1;
     await ctx.answerCbQuery('◀️');
@@ -287,9 +270,9 @@ export class ClothingWizard {
 
   // ═══ WIZARD STEPS ════════════════════════════════════════════════════════════
 
-  // Шаг 0: Пол (выбор только через inline-кнопки, см. onGenderSelect)
+  // Шаг 0: Возрастная категория (выбор только через inline-кнопки, см. onAgeCategoryToggle)
   @WizardStep(0)
-  async onGenderStep(@Ctx() ctx: any) {
+  async onAgeCategoryStep(@Ctx() ctx: any) {
     // Текстовый/иной ввод на этом шаге игнорируется — выбор только кнопками
   }
 
@@ -346,18 +329,6 @@ export class ClothingWizard {
     state.customStepMessageId = ctx.callbackQuery.message.message_id;
     await ctx.answerCbQuery();
     await ctx.reply('✏️ Введите свои варианты цветов через запятую:', {
-      ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize(),
-    });
-  }
-
-  @Action(SIZE_CUSTOM_CB)
-  async onSizeCustom(@Ctx() ctx: any) {
-    if (ctx.wizard.cursor !== 6) { await ctx.answerCbQuery(); return; }
-    const state = getState(ctx);
-    state.waitingForCustom = 'size';
-    state.customStepMessageId = ctx.callbackQuery.message.message_id;
-    await ctx.answerCbQuery();
-    await ctx.reply('✏️ Введите свои варианты размеров через запятую:', {
       ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize(),
     });
   }
@@ -512,47 +483,8 @@ export class ClothingWizard {
     );
   }
 
-  // Шаг 6: Кастомный ввод размеров
+  // Шаг 6: Главное фото
   @WizardStep(6)
-  async onStep5(@Ctx() ctx: any, @Message() msg: any) {
-    const state = getState(ctx);
-    if (!state.waitingForCustom) return;
-    if (msg?.text === CANCEL_TEXT) {
-      await sendCancelConfirmation(ctx);
-      return;
-    }
-    if (msg?.text === BACK_TEXT) {
-      state.waitingForCustom = null;
-      state.customStepMessageId = null;
-      await removeReplyKeyboard(ctx);
-      await sendSizesKeyboard(
-        ctx,
-        this.customOptions.getOptions('sizes'),
-        state.selectedSizes,
-      );
-      return;
-    }
-    const customs = (msg?.text as string)?.split(',').map((s) => s.trim()).filter(Boolean);
-    if (!customs?.length) { await ctx.reply('Введите хотя бы один вариант через запятую.'); return; }
-    const added: string[] = [];
-    for (const c of customs) {
-      if (!state.selectedSizes.includes(c)) {
-        state.selectedSizes.push(c);
-        added.push(c);
-        this.customOptions.addCustomOption('sizes', c);
-      }
-    }
-    state.waitingForCustom = null;
-    state.customStepMessageId = null;
-    await removeReplyKeyboard(ctx);
-    await ctx.reply(
-      `✅ Добавлено: *${added.join(', ')}*\n\nВыберите ещё из списка выше или нажмите *Готово*`,
-      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([Markup.button.callback('✅ Готово', DONE_CB)]) },
-    );
-  }
-
-  // Шаг 7: Главное фото
-  @WizardStep(7)
   async onMainPhotoStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
 
@@ -564,13 +496,9 @@ export class ClothingWizard {
     if (msg?.text === BACK_TEXT) {
       state.mainPhoto = null;
       state.submission.photos = undefined;
-      ctx.wizard.cursor = 6;
+      ctx.wizard.cursor = 5;
       await removeReplyKeyboard(ctx);
-      await sendSizesKeyboard(
-        ctx,
-        this.customOptions.getOptions('sizes'),
-        state.selectedSizes,
-      );
+      await sendColorsKeyboard(ctx, this.customOptions.getOptions('colors'), state.selectedColors);
       return;
     }
 
@@ -597,8 +525,8 @@ export class ClothingWizard {
     });
   }
 
-  // Шаг 8: Описание
-  @WizardStep(8)
+  // Шаг 7: Описание
+  @WizardStep(7)
   async onDescriptionStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
 
@@ -609,7 +537,7 @@ export class ClothingWizard {
 
     if (msg?.text === BACK_TEXT) {
       state.submission.description = undefined;
-      ctx.wizard.cursor = 7;
+      ctx.wizard.cursor = 6;
       await removeReplyKeyboard(ctx);
       await sendMainPhotoPrompt(ctx);
       return;
@@ -630,8 +558,8 @@ export class ClothingWizard {
     await sendAdditionalDescriptionPrompt(ctx);
   }
 
-  // Шаг 9: Дополнительное описание
-  @WizardStep(9)
+  // Шаг 8: Дополнительное описание
+  @WizardStep(8)
   async onAdditionalDescriptionStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
 
@@ -642,7 +570,7 @@ export class ClothingWizard {
 
     if (msg?.text === BACK_TEXT) {
       state.submission.additionalDescription = undefined;
-      ctx.wizard.cursor = 8;
+      ctx.wizard.cursor = 7;
       await sendDescriptionPrompt(ctx);
       return;
     }
@@ -662,8 +590,8 @@ export class ClothingWizard {
     await sendExtraPhotosPrompt(ctx);
   }
 
-  // Шаг 10: Дополнительные фото
-  @WizardStep(10)
+  // Шаг 9: Дополнительные фото
+  @WizardStep(9)
   async onExtraPhotosStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
 
@@ -675,7 +603,7 @@ export class ClothingWizard {
     if (msg?.text === BACK_TEXT) {
       state.mainPhoto = null;
       state.submission.photos = undefined;
-      ctx.wizard.cursor = 9;
+      ctx.wizard.cursor = 8;
       await removeReplyKeyboard(ctx);
       await sendAdditionalDescriptionPrompt(ctx);
       return;
@@ -704,15 +632,14 @@ export class ClothingWizard {
   private async showStep(ctx: any, step: number) {
     const state = getState(ctx);
     switch (step) {
-      case 0: return sendGenderKeyboard(ctx, state.submission.gender);
+      case 0: return sendAgeCategoryKeyboard(ctx, state.selectedAgeCategories);
       case 1: return sendSuitTypeKeyboard(ctx, this.customOptions.getOptions('suitTypes'), state.submission.type);
       case 2: return sendWholesalePricePrompt(ctx);
       case 3: return sendRetailPricePrompt(ctx);
       case 4: return sendMaterialsKeyboard(ctx, this.customOptions.getOptions('materials'), state.selectedMaterials);
       case 5: return sendColorsKeyboard(ctx, this.customOptions.getOptions('colors'), state.selectedColors);
-      case 6: return sendSizesKeyboard(ctx, this.customOptions.getOptions('sizes'), state.selectedSizes);
-      case 8: return sendDescriptionPrompt(ctx);
-      case 9: return sendAdditionalDescriptionPrompt(ctx);
+      case 7: return sendDescriptionPrompt(ctx);
+      case 8: return sendAdditionalDescriptionPrompt(ctx);
     }
   }
 
@@ -763,7 +690,7 @@ export class ClothingWizard {
 
     const caption =
       `✅ *Товар добавлен!*\n\n` +
-      `🚻 *Пол:* ${s.gender}\n` +
+      `🚻 *Пол:* ${s.gender?.join(', ')}\n` +
       `👔 *Тип:* ${s.type}\n` +
       `💰 *Цена оптом:* ${s.wholesalePrice}\n` +
       `💵 *Цена в розницу:* ${s.retailPrice}\n` +
@@ -833,18 +760,26 @@ function multiSelectMarkup(
 
 // ─── Функции отображения каждого шага ─────────────────────────────────────────
 
-async function sendGenderKeyboard(
-  ctx: any,
-  selected: string | undefined,
-): Promise<{ message_id: number }> {
-  const buttons = WIZARD_GENDERS.map((g, i) => [
-    Markup.button.callback(selected === g ? `✅ ${g}` : g, `gender:${i}`),
+function ageCategoryMarkup(selected: string[]) {
+  const rows = AGE_CATEGORIES.map((category) => [
+    Markup.button.callback(
+      selected.includes(category) ? `✅ ${category}` : category,
+      `age:${category}`,
+    ),
   ]);
-  buttons.push([Markup.button.callback('❌ Отмена', CANCEL_CB)]);
-  return (await ctx.reply('🚻 *Шаг 1 из 11* — Выберите пол:', {
-    parse_mode: 'Markdown',
-    ...Markup.inlineKeyboard(buttons),
-  })) as { message_id: number };
+  rows.push([Markup.button.callback('✅ Готово', DONE_CB)]);
+  rows.push([Markup.button.callback('❌ Отмена', CANCEL_CB)]);
+  return Markup.inlineKeyboard(rows);
+}
+
+async function sendAgeCategoryKeyboard(
+  ctx: any,
+  selected: string[],
+): Promise<{ message_id: number }> {
+  return (await ctx.reply(
+    '🚻 *Шаг 1 из 10* — Выберите возрастную категорию:\n_Можно выбрать несколько_',
+    { parse_mode: 'Markdown', ...ageCategoryMarkup(selected) },
+  )) as { message_id: number };
 }
 
 async function sendSuitTypeKeyboard(
@@ -857,7 +792,7 @@ async function sendSuitTypeKeyboard(
   ]);
   buttons.push([Markup.button.callback('✏️ Свой вариант', TYPE_CUSTOM_CB)]);
   buttons.push([Markup.button.callback('❌ Отмена', CANCEL_CB)]);
-  return (await ctx.reply('👔 *Шаг 2 из 11* — Выберите тип костюма:', {
+  return (await ctx.reply('👔 *Шаг 2 из 10* — Выберите тип костюма:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard(buttons),
   })) as { message_id: number };
@@ -865,7 +800,7 @@ async function sendSuitTypeKeyboard(
 
 async function sendWholesalePricePrompt(ctx: any) {
   await ctx.reply(
-    '💰 *Шаг 3 из 11* — Введите цену оптом и валюту через пробел:\n\n' +
+    '💰 *Шаг 3 из 10* — Введите цену оптом и валюту через пробел:\n\n' +
       '_Примеры: 500 сом · 1200 рубль · 15 доллар_',
     { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize() },
   );
@@ -873,7 +808,7 @@ async function sendWholesalePricePrompt(ctx: any) {
 
 async function sendRetailPricePrompt(ctx: any) {
   await ctx.reply(
-    '💵 *Шаг 4 из 11* — Введите цену в розницу и валюту через пробел:\n\n' +
+    '💵 *Шаг 4 из 10* — Введите цену в розницу и валюту через пробел:\n\n' +
       '_Примеры: 500 сом · 1200 рубль · 15 доллар_',
     { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize() },
   );
@@ -881,41 +816,34 @@ async function sendRetailPricePrompt(ctx: any) {
 
 async function sendMaterialsKeyboard(ctx: any, items: string[], selected: string[]) {
   await ctx.reply(
-    '🧵 *Шаг 5 из 11* — Выберите материал(ы):\n_Можно выбрать несколько_',
+    '🧵 *Шаг 5 из 10* — Выберите материал(ы):\n_Можно выбрать несколько_',
     { parse_mode: 'Markdown', ...multiSelectMarkup(items, selected, 'mat', MAT_CUSTOM_CB) },
   );
 }
 
 async function sendColorsKeyboard(ctx: any, items: string[], selected: string[]) {
   await ctx.reply(
-    '🎨 *Шаг 6 из 11* — Выберите цвет(а):\n_Можно выбрать несколько_',
+    '🎨 *Шаг 6 из 10* — Выберите цвет(а):\n_Можно выбрать несколько_',
     { parse_mode: 'Markdown', ...multiSelectMarkup(items, selected, 'col', COL_CUSTOM_CB) },
-  );
-}
-
-async function sendSizesKeyboard(ctx: any, items: string[], selected: string[]) {
-  await ctx.reply(
-    '📏 *Шаг 7 из 11* — Выберите размер(ы):\n_Можно выбрать несколько_',
-    { parse_mode: 'Markdown', ...multiSelectMarkup(items, selected, 'size', SIZE_CUSTOM_CB) },
   );
 }
 
 async function sendMainPhotoPrompt(ctx: any) {
   await ctx.reply(
-    '📸 *Шаг 8 из 11* — Отправьте главное фото товара:\n_Одно фото_',
+    '📸 *Шаг 7 из 10* — Отправьте главное фото товара:\n_Одно фото_',
     { parse_mode: 'Markdown', ...mainPhotoKeyboard },
   );
 }
 
 async function sendDescriptionPrompt(ctx: any) {
-  await ctx.reply('📝 *Шаг 9 из 11* — Описание товара:\n_Необязательно_', {
+  await ctx.reply('📝 *Шаг 8 из 10* — Описание товара:\n_Необязательно_', {
     parse_mode: 'Markdown',
     ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT], [CANCEL_TEXT]]).resize(),
   });
 }
 
 async function sendAdditionalDescriptionPrompt(ctx: any) {
-  await ctx.reply('📋 *Шаг 10 из 11* — Дополнительное описание:\n_Необязательно_', {
+  await ctx.reply('📋 *Шаг 9 из 10* — Дополнительное описание:\n_Необязательно_', {
     parse_mode: 'Markdown',
     ...Markup.keyboard([[BACK_TEXT], [SKIP_TEXT], [CANCEL_TEXT]]).resize(),
   });
@@ -923,7 +851,7 @@ async function sendAdditionalDescriptionPrompt(ctx: any) {
 
 async function sendExtraPhotosPrompt(ctx: any) {
   await ctx.reply(
-    `📷 *Шаг 11 из 11* — Дополнительные фото (до ${MAX_EXTRA_PHOTOS}):\n_Необязательно_`,
+    `📷 *Шаг 10 из 10* — Дополнительные фото (до ${MAX_EXTRA_PHOTOS}):\n_Необязательно_`,
     { parse_mode: 'Markdown', ...extraPhotosKeyboard },
   );
 }

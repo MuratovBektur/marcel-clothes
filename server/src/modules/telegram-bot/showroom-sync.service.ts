@@ -39,7 +39,7 @@ export class ShowroomSyncService {
         this.http.post<{ id: string }>(
           SHOWROOM_API_URL,
           {
-            gender: product.gender,
+            gender: product.gender ?? [],
             category: SHOWROOM_CATEGORY,
             type: product.type,
             country: SHOWROOM_COUNTRY,

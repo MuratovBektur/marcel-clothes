@@ -2,7 +2,7 @@ import { computed, ref, type Ref } from 'vue';
 
 export interface Product {
   id: string;
-  gender: string;
+  gender: string[] | null;
   category: string;
   type: string;
   brand: string | null;

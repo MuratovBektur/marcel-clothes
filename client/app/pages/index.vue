@@ -61,7 +61,7 @@
             @click="openProduct(item.id)"
           >
             <div class="hero-product-mini__name">{{ item.type }}{{ item.brand ? ' · ' + item.brand : '' }}</div>
-            <div class="hero-product-mini__sub">{{ item.gender }} · {{ item.category }}</div>
+            <div class="hero-product-mini__sub">{{ item.gender?.join(', ') }} · {{ item.category }}</div>
             <div class="hero-product-mini__price">{{ item.retailPrice }}</div>
           </div>
         </template>

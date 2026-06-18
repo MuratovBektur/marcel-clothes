@@ -2,7 +2,7 @@
   <div class="product-info">
     <!-- Breadcrumb meta -->
     <div class="product-info__meta">
-      <span class="product-info__brand">{{ product.gender }} · {{ product.category }}</span>
+      <span class="product-info__brand">{{ product.gender?.join(', ') }} · {{ product.category }}</span>
     </div>
 
     <!-- Title -->
