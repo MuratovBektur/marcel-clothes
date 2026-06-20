@@ -4,7 +4,9 @@
       "Skill(run)",
       "Skill(run:*)",
       "Read(*)",
-      "Bash(*)"
+      "Bash(*)",
+      "Read(//tmp/**)",
+      "Bash(rm -rf /tmp/pwtest)"
     ],
     "additionalDirectories": [
       "/tmp/pwtest"

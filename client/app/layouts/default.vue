@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Footer from '~/components/Footer.vue'
 import Header from '~/components/Header/index.vue'
+import ChatWidget from '~/components/ChatWidget.client.vue'
 
 </script>
 
@@ -11,6 +12,7 @@ import Header from '~/components/Header/index.vue'
       <slot />
     </main>
     <Footer />
+    <ChatWidget />
   </div>
 </template>
 

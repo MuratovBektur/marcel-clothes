@@ -8,6 +8,7 @@ import { EditProductScene } from './edit-product.scene';
 import { TelegramBotUpdate } from './telegram-bot.update';
 import { ProductsModule } from '../products/products.module';
 import { OrdersModule } from '../orders/orders.module';
+import { ChatModule } from '../chat/chat.module';
 import { FileStorageService } from './file-storage.service';
 import { CustomOptionsService } from './custom-options.service';
 import { AuthService } from './auth.service';
@@ -35,6 +36,7 @@ if (!TELEGRAM_BOT_TOKEN) {
     TypeOrmModule.forFeature([BotUserGroup, BotUserWaGroup, BotAuthorizedUser, AllowedPhone]),
     ProductsModule,
     OrdersModule,
+    ChatModule,
     HttpModule,
   ],
   providers: [

@@ -6,6 +6,7 @@ import { Telegraf } from 'telegraf';
 import { Context, Markup } from 'telegraf';
 import { BotAuthorizedUser } from '../../entities/bot-authorized-user.entity';
 import { Order } from '../../entities/order.entity';
+import { ChatService } from '../chat/chat.service';
 
 @Injectable()
 export class OrderNotifyService {
@@ -13,6 +14,7 @@ export class OrderNotifyService {
     @InjectBot() private readonly bot: Telegraf<Context>,
     @InjectRepository(BotAuthorizedUser)
     private readonly adminRepo: Repository<BotAuthorizedUser>,
+    private readonly chatService: ChatService,
   ) {}
 
   async notifyNewOrder(order: Order): Promise<void> {
@@ -35,6 +37,8 @@ export class OrderNotifyService {
     ]);
 
     for (const admin of admins) {
+      // Не отвлекаем оператора, который сейчас ведёт диалог с клиентом в чате.
+      if (await this.chatService.isHandlingChat(Number(admin.telegramId))) continue;
       try {
         await this.bot.telegram.sendMessage(Number(admin.telegramId), text, {
           parse_mode: 'Markdown',

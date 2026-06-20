@@ -6,6 +6,7 @@ import { ViewsModule } from './modules/views/views.module';
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 import { ProductsModule } from './modules/products/products.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 import getDBVariables from './libs/getDBVariables';
 import { ScheduleModule } from '@nestjs/schedule/dist/schedule.module';
@@ -34,6 +35,7 @@ const { DB_USER, DB_PASSWORD, DB_NAME, DB_PORT, DB_HOST } = getDBVariables();
     TelegramBotModule,
     ProductsModule,
     OrdersModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

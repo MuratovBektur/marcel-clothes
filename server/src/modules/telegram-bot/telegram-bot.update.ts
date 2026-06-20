@@ -19,6 +19,8 @@ import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import { ShowroomSyncService } from './showroom-sync.service';
+import { ChatService } from '../chat/chat.service';
+import { ChatNotifyService } from '../chat/chat-notify.service';
 import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
 
 @Update()
@@ -32,6 +34,8 @@ export class TelegramBotUpdate implements OnModuleInit {
     private readonly tgGroupService: TgGroupService,
     private readonly waService: WaService,
     private readonly showroomSync: ShowroomSyncService,
+    private readonly chatService: ChatService,
+    private readonly chatNotifyService: ChatNotifyService,
   ) {}
 
   async onModuleInit() {
@@ -411,12 +415,148 @@ export class TelegramBotUpdate implements OnModuleInit {
     });
   }
 
+  // ─── Чат с сайта: оператор забирает диалог себе ──────────────────────────────
+  @Action(/^chat_claim:(.+)$/)
+  async onChatClaim(@Ctx() ctx: any) {
+    if (!this.authService.isAuthorized(ctx.from.id)) {
+      await ctx.answerCbQuery('Нет доступа').catch(() => {});
+      return;
+    }
+
+    const threadId = ctx.match[1];
+    const thread = await this.chatService.findThread(threadId).catch(() => null);
+    if (!thread) {
+      await ctx.answerCbQuery('Диалог не найден').catch(() => {});
+      return;
+    }
+    if (thread.closedAt) {
+      await ctx.answerCbQuery('Клиент уже закрыл этот чат', { show_alert: true }).catch(() => {});
+      await ctx
+        .editMessageText(`💬 ${thread.name} (${thread.phone})\n\n🚪 Клиент закрыл чат.`)
+        .catch(() => {});
+      return;
+    }
+
+    const result = await this.chatService.claimThread(threadId, ctx.from.id);
+    if (result === 'taken') {
+      await ctx.answerCbQuery('Уже отвечает другой оператор', { show_alert: true }).catch(() => {});
+      await ctx
+        .editMessageText(`💬 ${thread.name} (${thread.phone})\n\n🔒 Уже отвечает другой оператор.`)
+        .catch(() => {});
+      return;
+    }
+
+    if (!ctx.session) ctx.session = {};
+    ctx.session.activeChatThreadId = threadId;
+
+    if (result === 'claimed') {
+      await this.chatService.addMessage(threadId, 'system', 'Оператор подключился, ожидайте ответа.');
+      await this.chatNotifyService.markClaimedForOthers(threadId, ctx.from.id, thread).catch(() => {});
+    }
+
+    await ctx.answerCbQuery('Вы ведёте этот диалог').catch(() => {});
+    // Снимаем только кнопку — текст сообщения не трогаем, там исходное сообщение клиента.
+    await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+    await ctx.reply(
+      `✅ Вы ведёте диалог с *${thread.name}* (${thread.phone}).\n` +
+        `Просто пишите сообщения — они уйдут клиенту.`,
+      { parse_mode: 'Markdown', ...this.activeThreadKeyboard(threadId) },
+    );
+  }
+
+  // ─── Чат с сайта: оператор завершает диалог ──────────────────────────────────
+  @Action(/^chat_end:(.+)$/)
+  async onChatEnd(@Ctx() ctx: any) {
+    const threadId = ctx.match[1];
+    const thread = await this.chatService.findThread(threadId).catch(() => null);
+    if (!thread) {
+      await ctx.answerCbQuery('Диалог не найден').catch(() => {});
+      return;
+    }
+    if (thread.closedAt) {
+      await ctx.answerCbQuery('Клиент уже закрыл этот чат', { show_alert: true }).catch(() => {});
+      await ctx
+        .editMessageText(`💬 ${thread.name} (${thread.phone})\n\n🚪 Клиент закрыл чат.`)
+        .catch(() => {});
+      return;
+    }
+    if (Number(thread.claimedBy) !== ctx.from.id) {
+      await ctx.answerCbQuery('Это не ваш диалог').catch(() => {});
+      return;
+    }
+
+    await this.chatService.releaseThread(threadId);
+    await this.chatService.addMessage(threadId, 'system', 'Оператор завершил диалог.');
+    if (ctx.session) {
+      ctx.session.activeChatThreadId = null;
+      ctx.session.chatDraft = null;
+    }
+
+    await ctx.answerCbQuery('Диалог завершён').catch(() => {});
+    await ctx.editMessageText(`💬 ${thread.name} (${thread.phone})\n\n✅ Диалог завершён.`).catch(() => {});
+  }
+
+  // ─── Чат с сайта: подтверждение отправки сообщения клиенту ──────────────────
+  @Action(/^chat_confirm_send:(.+)$/)
+  async onChatConfirmSend(@Ctx() ctx: any) {
+    const threadId = ctx.match[1];
+    const draft = ctx.session?.chatDraft;
+    if (!draft || draft.threadId !== threadId) {
+      await ctx.answerCbQuery('Сообщение устарело, наберите текст заново').catch(() => {});
+      return;
+    }
+
+    const thread = await this.chatService.findThread(threadId).catch(() => null);
+    if (!thread || thread.closedAt || Number(thread.claimedBy) !== ctx.from.id) {
+      await ctx.answerCbQuery('Диалог уже недоступен').catch(() => {});
+      ctx.session.chatDraft = null;
+      return;
+    }
+
+    await this.chatService.addMessage(threadId, 'admin', draft.text);
+    ctx.session.chatDraft = null;
+
+    await ctx.answerCbQuery('Отправлено').catch(() => {});
+    await ctx
+      .editMessageText(`✅ Отправлено клиенту:\n\n${draft.text}`, this.activeThreadKeyboard(threadId))
+      .catch(() => {});
+  }
+
+  // ─── Чат с сайта: переключить, в какой диалог уходит набираемый текст ────────
+  @Action(/^chat_focus:(.+)$/)
+  async onChatFocus(@Ctx() ctx: any) {
+    const threadId = ctx.match[1];
+    const thread = await this.chatService.findThread(threadId).catch(() => null);
+    if (!thread) {
+      await ctx.answerCbQuery('Диалог не найден').catch(() => {});
+      return;
+    }
+    if (thread.closedAt) {
+      await ctx.answerCbQuery('Клиент уже закрыл этот чат', { show_alert: true }).catch(() => {});
+      return;
+    }
+    if (Number(thread.claimedBy) !== ctx.from.id) {
+      await ctx.answerCbQuery('Это не ваш диалог').catch(() => {});
+      return;
+    }
+
+    if (!ctx.session) ctx.session = {};
+    ctx.session.activeChatThreadId = threadId;
+    await ctx.answerCbQuery('Сообщения теперь уходят в этот диалог').catch(() => {});
+  }
+
   // ─── Ввод юзернейма TG-группы и номера WA ────────────────────────────────────
   @On('text')
   async onText(@Ctx() ctx: any) {
     if (ctx.scene?.current) return;
 
     const text: string = ctx.message?.text ?? '';
+
+    // ── Ответ клиенту в виджете чата (если диалог закреплён за этим оператором) ──
+    if (!text.startsWith('/') && this.authService.isAuthorized(ctx.from.id)) {
+      if (await this.tryRouteAdminChatMessage(ctx, text)) return;
+    }
+
     if (text.startsWith('/')) return;
 
     // ── Ввод номера телефона для доступа к боту ──────────────────────────────
@@ -664,6 +804,50 @@ export class TelegramBotUpdate implements OnModuleInit {
 
   private async requestAuth(ctx: any) {
     await ctx.reply('🔒 Сначала пройдите идентификацию. Нажмите /start');
+  }
+
+  // ─── Чат с сайта: набросок ответа оператора с подтверждением перед отправкой ──
+  private async tryRouteAdminChatMessage(ctx: any, text: string): Promise<boolean> {
+    let threadId: string | null = ctx.session?.activeChatThreadId ?? null;
+
+    if (!threadId) {
+      const replyTo = ctx.message?.reply_to_message;
+      if (replyTo) {
+        threadId = await this.chatService.findThreadIdByTelegramRef(ctx.chat.id, replyTo.message_id);
+      }
+    }
+    if (!threadId) return false;
+
+    const thread = await this.chatService.findThread(threadId).catch(() => null);
+    if (!thread) return false;
+
+    // closeThread() обнуляет claimedBy, поэтому проверяем это до проверки владения диалогом —
+    // иначе сообщение о закрытии никогда бы не показывалось тому, кто его вёл.
+    if (thread.closedAt) {
+      if (ctx.session?.activeChatThreadId !== threadId) return false;
+      await ctx.reply(`💬 ${thread.name} (${thread.phone})\n\n🚪 Клиент закрыл чат. Диалог завершён.`);
+      ctx.session.activeChatThreadId = null;
+      ctx.session.chatDraft = null;
+      return true;
+    }
+
+    if (Number(thread.claimedBy) !== ctx.from.id) return false;
+
+    if (!ctx.session) ctx.session = {};
+    ctx.session.activeChatThreadId = threadId;
+    ctx.session.chatDraft = { threadId, text };
+
+    await ctx.reply(`Сообщение клиенту:\n\n${text}`, {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Отправить сообщение', `chat_confirm_send:${threadId}`)],
+        [Markup.button.callback('🔚 Завершить диалог', `chat_end:${threadId}`)],
+      ]),
+    });
+    return true;
+  }
+
+  private activeThreadKeyboard(threadId: string) {
+    return Markup.inlineKeyboard([[Markup.button.callback('🔚 Завершить диалог', `chat_end:${threadId}`)]]);
   }
 
   // ─── Карточки: навигация и действия ──────────────────────────────────────────

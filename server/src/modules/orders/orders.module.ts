@@ -6,11 +6,13 @@ import { BotAuthorizedUser } from '../../entities/bot-authorized-user.entity';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { OrderNotifyService } from './order-notify.service';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, BotAuthorizedUser]),
     TelegrafModule,
+    ChatModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderNotifyService],
