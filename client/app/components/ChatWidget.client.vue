@@ -14,42 +14,24 @@
         <form v-if="!threadId" class="chat-form" @submit.prevent="submitForm">
           <div class="chat-form__field">
             <label class="chat-form__label" for="chat-name">Имя</label>
-            <input
-              id="chat-name"
-              v-model="form.name"
-              class="chat-form__input"
-              :class="{ 'chat-form__input--error': errors.name }"
-              type="text"
-              placeholder="Введите имя"
-              autocomplete="name"
-            />
+            <input id="chat-name" v-model="form.name" class="chat-form__input"
+              :class="{ 'chat-form__input--error': errors.name }" type="text" placeholder="Введите имя"
+              autocomplete="name" />
             <span v-if="errors.name" class="chat-form__error">{{ errors.name }}</span>
           </div>
 
           <div class="chat-form__field">
             <label class="chat-form__label" for="chat-phone">Телефон</label>
-            <input
-              id="chat-phone"
-              v-model="form.phone"
-              class="chat-form__input"
-              :class="{ 'chat-form__input--error': errors.phone }"
-              type="tel"
-              placeholder="+996 700 000 000"
-              autocomplete="tel"
-            />
+            <input id="chat-phone" v-model="form.phone" class="chat-form__input"
+              :class="{ 'chat-form__input--error': errors.phone }" type="tel" placeholder="+996 700 000 000"
+              autocomplete="tel" />
             <span v-if="errors.phone" class="chat-form__error">{{ errors.phone }}</span>
           </div>
 
           <div class="chat-form__field">
             <label class="chat-form__label" for="chat-text">Сообщение</label>
-            <textarea
-              id="chat-text"
-              v-model="form.text"
-              class="chat-form__textarea"
-              :class="{ 'chat-form__input--error': errors.text }"
-              rows="3"
-              placeholder="Чем можем помочь?"
-            />
+            <textarea id="chat-text" v-model="form.text" class="chat-form__textarea"
+              :class="{ 'chat-form__input--error': errors.text }" rows="3" placeholder="Чем можем помочь?" />
             <span v-if="errors.text" class="chat-form__error">{{ errors.text }}</span>
           </div>
 
@@ -64,27 +46,19 @@
         <!-- ── Переписка ───────────────────────────────────────────── -->
         <template v-else>
           <div ref="messagesEl" class="chat-messages">
-            <div
-              v-for="m in messages"
-              :key="m.id"
-              :class="[
-                m.sender === 'system' ? 'chat-system' : 'chat-bubble',
-                m.sender === 'client' && 'chat-bubble--client',
-                m.sender === 'admin' && 'chat-bubble--admin',
-              ]"
-            >
+            <div v-for="m in messages" :key="m.id" :class="[
+              m.sender === 'system' ? 'chat-system' : 'chat-bubble',
+              m.sender === 'client' && 'chat-bubble--client',
+              m.sender === 'admin' && 'chat-bubble--admin',
+            ]">
               {{ m.text }}
             </div>
           </div>
 
           <form class="chat-reply" @submit.prevent="submitReply">
-            <input
-              v-model="replyText"
-              class="chat-reply__input"
-              type="text"
-              placeholder="Ваше сообщение..."
-            />
-            <button class="chat-reply__send" type="submit" :disabled="sending || !replyText.trim()">
+            <input v-model="replyText" class="chat-reply__input" type="text" :disabled="!canReply"
+              :placeholder="canReply ? 'Ваше сообщение...' : 'Дождитесь ответа оператора...'" />
+            <button class="chat-reply__send" type="submit" :disabled="!canReply || sending || !replyText.trim()">
               →
             </button>
           </form>
@@ -92,21 +66,12 @@
       </div>
     </Transition>
 
-    <button
-      class="chat-widget__btn"
-      :class="{ 'chat-widget__btn--open': isOpen }"
-      aria-label="Открыть чат"
-      @click="toggle"
-    >
+    <button class="chat-widget__btn" :class="{ 'chat-widget__btn--open': isOpen }" aria-label="Открыть чат"
+      @click="toggle">
       <span v-if="hasUnread" class="chat-widget__badge" />
       <template v-if="!isOpen">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M4 4h16v12H8l-4 4V4z"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linejoin="round"
-          />
+          <path d="M4 4h16v12H8l-4 4V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
         </svg>
         <span class="chat-widget__btn-label">Написать нам</span>
       </template>
@@ -116,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import {
   useChat,
   readThreadIdFromStorage,
@@ -131,6 +96,9 @@ const threadId = ref<string | null>(null);
 const messages = ref<ChatMessage[]>([]);
 const messagesEl = ref<HTMLElement | null>(null);
 const hasUnread = ref(false);
+
+// Клиент может писать только после того, как оператор хотя бы раз ответил.
+const canReply = computed(() => messages.value.some((m) => m.sender === 'admin'));
 
 const form = reactive({ name: '', phone: '', text: '' });
 const errors = reactive<{ name?: string; phone?: string; text?: string }>({});
@@ -221,7 +189,7 @@ async function submitForm() {
 
 async function submitReply() {
   const text = replyText.value.trim();
-  if (!text || !threadId.value) return;
+  if (!text || !threadId.value || !canReply.value) return;
   sending.value = true;
   try {
     const message = await sendMessage(threadId.value, text);
@@ -327,6 +295,7 @@ onUnmounted(() => {
 .chat-panel-fade-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
+
 .chat-panel-fade-enter-from,
 .chat-panel-fade-leave-to {
   opacity: 0;
@@ -379,7 +348,9 @@ onUnmounted(() => {
     line-height: 1;
     opacity: 0.8;
 
-    &:hover { opacity: 1; }
+    &:hover {
+      opacity: 1;
+    }
   }
 
   @media (max-width: 600px) {
@@ -422,11 +393,18 @@ onUnmounted(() => {
     width: 100%;
     resize: vertical;
 
-    &:focus { border-color: $navy; }
-    &::placeholder { color: #bbb; }
+    &:focus {
+      border-color: $navy;
+    }
+
+    &::placeholder {
+      color: #bbb;
+    }
   }
 
-  &__input--error { border-color: #c0392b; }
+  &__input--error {
+    border-color: #c0392b;
+  }
 
   &__error {
     font-family: 'IBM Plex Mono', monospace;
@@ -483,7 +461,9 @@ onUnmounted(() => {
 }
 
 @keyframes chat-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 // ── Переписка ──────────────────────────────────────────────
@@ -549,7 +529,9 @@ onUnmounted(() => {
     padding: 21px 24px;
     outline: none;
 
-    &::placeholder { color: #bbb; }
+    &::placeholder {
+      color: #bbb;
+    }
   }
 
   &__send {
@@ -582,8 +564,13 @@ onUnmounted(() => {
     }
   }
 
-  .chat-widget__btn-label { font-size: 12px; }
-  .chat-widget__btn-close { font-size: 20px; }
+  .chat-widget__btn-label {
+    font-size: 12px;
+  }
+
+  .chat-widget__btn-close {
+    font-size: 20px;
+  }
 
   .chat-widget__badge {
     top: 4px;
@@ -596,24 +583,62 @@ onUnmounted(() => {
   .chat-panel {
     bottom: 81px;
 
-    &__header { padding: 18px 20px; }
-    &__title { font-size: 25px; }
-    &__subtitle { font-size: 11px; margin-top: 4px; }
-    &__close { font-size: 15px; padding: 2px 4px; }
+    &__header {
+      padding: 18px 20px;
+    }
+
+    &__title {
+      font-size: 25px;
+    }
+
+    &__subtitle {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    &__close {
+      font-size: 15px;
+      padding: 2px 4px;
+    }
   }
 
   .chat-form {
     padding: 20px;
     gap: 16px;
 
-    &__field { gap: 7px; }
-    &__label { font-size: 11px; }
+    &__field {
+      gap: 7px;
+    }
+
+    &__label {
+      font-size: 11px;
+    }
+
     &__input,
-    &__textarea { font-size: 14px; padding: 11px 13px; }
-    &__error { font-size: 11px; }
-    &__submit { font-size: 11px; padding: 15px 22px; gap: 11px; }
-    &__spinner { width: 14px; height: 14px; border-width: 2px; }
-    &__submit-error { font-size: 11px; }
+    &__textarea {
+      font-size: 14px;
+      padding: 11px 13px;
+    }
+
+    &__error {
+      font-size: 11px;
+    }
+
+    &__submit {
+      font-size: 11px;
+      padding: 15px 22px;
+      gap: 11px;
+    }
+
+    &__spinner {
+      width: 14px;
+      height: 14px;
+      border-width: 2px;
+    }
+
+    &__submit-error {
+      font-size: 11px;
+    }
   }
 
   .chat-messages {
@@ -634,8 +659,15 @@ onUnmounted(() => {
   }
 
   .chat-reply {
-    &__input { font-size: 14px; padding: 16px 18px; }
-    &__send { width: 54px; font-size: 18px; }
+    &__input {
+      font-size: 14px;
+      padding: 16px 18px;
+    }
+
+    &__send {
+      width: 54px;
+      font-size: 18px;
+    }
   }
 }
 </style>

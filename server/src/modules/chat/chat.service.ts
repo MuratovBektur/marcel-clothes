@@ -93,4 +93,10 @@ export class ChatService {
     });
     return count > 0;
   }
+
+  /** true, если оператор уже хотя бы раз ответил клиенту в этом диалоге. */
+  async hasAdminReplied(threadId: string): Promise<boolean> {
+    const count = await this.messageRepo.count({ where: { threadId, sender: 'admin' } });
+    return count > 0;
+  }
 }

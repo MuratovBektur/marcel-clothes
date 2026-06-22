@@ -56,29 +56,16 @@ export class ChatNotifyService {
     }
   }
 
-  /** Помечает приглашения у всех остальных операторов как занятые, после того как один из них забрал диалог. */
-  async markClaimedForOthers(threadId: string, claimerId: number, thread: ChatThread): Promise<void> {
+  /** Удаляет приглашения у всех остальных операторов, после того как один из них забрал диалог. */
+  async markClaimedForOthers(threadId: string, claimerId: number): Promise<void> {
     const refs = await this.chatService.getTelegramRefs(threadId);
-    const latestByChat = new Map<number, (typeof refs)[number]>();
     for (const ref of refs) {
       const chatId = Number(ref.telegramChatId);
-      const existing = latestByChat.get(chatId);
-      if (!existing || ref.telegramMessageId > existing.telegramMessageId) {
-        latestByChat.set(chatId, ref);
-      }
-    }
-
-    for (const [chatId, ref] of latestByChat) {
       if (chatId === claimerId) continue;
       try {
-        await this.bot.telegram.editMessageText(
-          chatId,
-          ref.telegramMessageId,
-          undefined,
-          `💬 ${thread.name} (${thread.phone})\n\n🔒 Уже отвечает другой оператор.`,
-        );
+        await this.bot.telegram.deleteMessage(chatId, ref.telegramMessageId);
       } catch {
-        // message may be too old to edit — ignore
+        // сообщение уже удалено или слишком старое для удаления — игнорируем
       }
     }
   }

@@ -26,6 +26,9 @@ export class ChatController {
   async addMessage(@Param('id') id: string, @Body() dto: CreateMessageDto) {
     const thread = await this.chatService.findThread(id);
     if (thread.closedAt) throw new BadRequestException('Диалог завершён');
+    if (!(await this.chatService.hasAdminReplied(id))) {
+      throw new BadRequestException('Дождитесь ответа оператора');
+    }
     const message = await this.chatService.addMessage(id, 'client', dto.text);
     await this.chatNotifyService.notifyNewMessage(thread, dto.text).catch(() => {});
     return message;

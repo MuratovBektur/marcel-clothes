@@ -451,7 +451,7 @@ export class TelegramBotUpdate implements OnModuleInit {
 
     if (result === 'claimed') {
       await this.chatService.addMessage(threadId, 'system', 'Оператор подключился, ожидайте ответа.');
-      await this.chatNotifyService.markClaimedForOthers(threadId, ctx.from.id, thread).catch(() => {});
+      await this.chatNotifyService.markClaimedForOthers(threadId, ctx.from.id).catch(() => {});
     }
 
     await ctx.answerCbQuery('Вы ведёте этот диалог').catch(() => {});
