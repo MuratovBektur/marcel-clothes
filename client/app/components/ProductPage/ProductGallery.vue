@@ -12,7 +12,8 @@
         class="product-gallery__main"
       ></video>
 
-      <img v-else :src="images[activeIndex]" :alt="alt" class="product-gallery__main" />
+      <img v-else :src="imgVariant(images[activeIndex], 'gallery')" :alt="alt" loading="eager"
+        class="product-gallery__main" />
 
       <div class="product-gallery__badges">
         <span v-if="badge === 'new'" class="product-gallery__badge product-gallery__badge--new"
@@ -40,7 +41,7 @@
           class="product-gallery__thumb-img"
         ></video>
 
-        <img v-else :src="url" :alt="`Фото ${i + 1}`" class="product-gallery__thumb-img" />
+        <img v-else :src="imgVariant(url, 'thumb')" :alt="`Фото ${i + 1}`" class="product-gallery__thumb-img" />
       </button>
     </div>
   </div>
@@ -48,6 +49,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import { imgVariant } from '~/libs/image-variants';
 
 defineProps({
   images: { type: Array, required: true },
@@ -143,18 +145,20 @@ function isVideo(url) {
     width: 64px;
     flex-shrink: 0;
     padding: 0;
-    border: 2px solid transparent;
+    border: none;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
     background: #f5f5f5;
     cursor: pointer;
     overflow: hidden;
-    transition: border-color 0.15s;
+    transition: outline-color 0.15s;
 
     &--on {
-      border-color: #111;
+      outline-color: #111;
     }
 
     &:not(&--on):hover {
-      border-color: #ccc;
+      outline-color: #ccc;
     }
   }
 

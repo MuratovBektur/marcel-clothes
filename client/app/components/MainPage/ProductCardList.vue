@@ -51,7 +51,7 @@
       </template>
 
       <template v-else-if="products.length">
-        <ProductCard v-for="item in products" :key="item.id" :product="item" />
+        <ProductCard v-for="(item, idx) in products" :key="item.id" :product="item" :index="idx" />
       </template>
 
       <div v-else class="grid__empty">
@@ -265,7 +265,7 @@ $bp: 1200px;
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 28px;
   padding-bottom: 60px;
   min-height: 300px;

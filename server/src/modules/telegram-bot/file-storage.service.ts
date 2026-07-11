@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import sharp from 'sharp';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { firstValueFrom } from 'rxjs';
+import { generateImageVariants } from '../../libs/image-variants';
 
 @Injectable()
 export class FileStorageService {
@@ -31,16 +31,21 @@ export class FileStorageService {
     const { data: arrayBuffer } = await firstValueFrom(
       this.http.get<ArrayBuffer>(downloadUrl, { responseType: 'arraybuffer' }),
     );
+    const buffer = Buffer.from(arrayBuffer);
 
-    // Optimize: resize to max 1200px wide, convert to WebP
-    const filename = `${crypto.randomUUID()}.webp`;
-    const dest = path.join(this.uploadDir, filename);
+    const baseName = crypto.randomUUID();
+    const rawExt = path.extname(filePath) || '.jpg';
 
-    await sharp(Buffer.from(arrayBuffer))
-      .resize(1200, 1600, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toFile(dest);
+    // Архивная копия исходных байт без обработки
+    await fs.promises.writeFile(
+      path.join(this.uploadDir, `${baseName}-raw${rawExt}`),
+      buffer,
+    );
 
+    // Мастер (полное разрешение) + card/gallery/thumb варианты под конкретные UI-места
+    await generateImageVariants(buffer, this.uploadDir, baseName);
+
+    const filename = `${baseName}.webp`;
     this.logger.log(`Saved ${filename}`);
     return `/uploads/products/${filename}`;
   }

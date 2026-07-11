@@ -36,7 +36,7 @@
                 class="cart-item"
               >
                 <NuxtLink :to="`/product/${item.productId}`" class="cart-item__photo-wrap">
-                  <img :src="item.photo" :alt="item.productType" class="cart-item__photo" />
+                  <img :src="imgVariant(item.photo, 'thumb')" :alt="item.productType" class="cart-item__photo" />
                 </NuxtLink>
                 <div class="cart-item__info">
                   <NuxtLink :to="`/product/${item.productId}`" class="cart-item__name">
@@ -131,6 +131,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { imgVariant } from '~/libs/image-variants';
 useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] });
 
 const { cartItems, isCartHydrated, remove, increment, decrement, clear } = useCart();

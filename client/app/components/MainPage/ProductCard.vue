@@ -1,8 +1,8 @@
 <template>
   <div class="product-card" @click="goToProduct">
     <div class="product-card__img">
-      <img v-if="product.photos?.[0]" :src="product.photos[0]" :alt="product.type" loading="lazy"
-        class="product-card__photo" />
+      <img v-if="product.photos?.[0]" :src="imgVariant(product.photos[0], 'card')" :alt="product.type"
+        :loading="index < 4 ? 'eager' : 'lazy'" class="product-card__photo" />
       <div v-else class="product-card__no-img">
         <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"
           opacity="0.12">
@@ -39,8 +39,11 @@
 
 <script setup lang="ts">
 import type { Product } from '~/composables/useProducts';
+import { imgVariant } from '~/libs/image-variants';
 
-const props = defineProps<{ product: Product }>();
+const props = withDefaults(defineProps<{ product: Product; index?: number }>(), {
+  index: 0,
+});
 const { toggle, isFav } = useFavourites();
 
 function goToProduct() {

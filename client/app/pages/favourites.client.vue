@@ -36,9 +36,10 @@
             <!-- Навигация теперь внутри ProductCard (useRouter) -->
             <!-- @open-product больше не нужен -->
             <ProductCard
-              v-for="p in favProducts"
+              v-for="(p, idx) in favProducts"
               :key="p.id"
               :product="p"
+              :index="idx"
             />
           </div>
 
