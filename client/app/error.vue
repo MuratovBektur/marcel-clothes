@@ -20,14 +20,6 @@ defineProps<{ error: { statusCode: number; message: string } }>();
 
 </script>
 
-<style lang="scss">
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;700&display=swap');
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body { background: #f7f7f5; }
-</style>
-
 <style lang="scss" scoped>
 .error-page {
   min-height: 100vh;
