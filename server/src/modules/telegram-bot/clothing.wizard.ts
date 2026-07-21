@@ -23,6 +23,8 @@ import { ClothingSubmission } from './clothing-submission.interface';
 
 // ─── Валидация цены: «число валюта», валюта — сом / рубль / доллар ────────────
 const PRICE_RE = /^\d+(\.\d+)?\s+(сом\p{L}*|рубл\p{L}*|доллар\p{L}*)$/iu;
+// ─── Розница — локальный рынок, валюта всегда сом, вводится только число ──────
+const RETAIL_PRICE_RE = /^\d+(\.\d+)?$/;
 
 // ─── Callback data ────────────────────────────────────────────────────────────
 const BACK_CB = 'wiz_back';
@@ -386,16 +388,15 @@ export class ClothingWizard {
     }
 
     const text = (msg?.text as string)?.trim();
-    if (!text || !PRICE_RE.test(text)) {
+    if (!text || !RETAIL_PRICE_RE.test(text)) {
       await ctx.reply(
-        `⚠️ Неверный формат. Введите цену и валюту через пробел:\n\n` +
-          `_Примеры: 500 сом · 1200 рубль · 15 доллар_`,
+        `⚠️ Неверный формат. Введите только число:\n\n_Пример: 500_`,
         { parse_mode: 'Markdown' },
       );
       return;
     }
 
-    state.submission.retailPrice = text;
+    state.submission.retailPrice = `${text} сом`;
     ctx.wizard.next();
     await removeReplyKeyboard(ctx);
     await sendMaterialsKeyboard(
@@ -808,8 +809,8 @@ async function sendWholesalePricePrompt(ctx: any) {
 
 async function sendRetailPricePrompt(ctx: any) {
   await ctx.reply(
-    '💵 *Шаг 4 из 10* — Введите цену в розницу и валюту через пробел:\n\n' +
-      '_Примеры: 500 сом · 1200 рубль · 15 доллар_',
+    '💵 *Шаг 4 из 10* — Введите цену в розницу (только число, сом проставится автоматически):\n\n' +
+      '_Пример: 500_',
     { parse_mode: 'Markdown', ...Markup.keyboard([[BACK_TEXT], [CANCEL_TEXT]]).resize() },
   );
 }

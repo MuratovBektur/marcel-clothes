@@ -17,6 +17,8 @@ import {
 } from './constants';
 
 const PRICE_RE = /^\d+(\.\d+)?\s+(сом\p{L}*|рубл\p{L}*|доллар\p{L}*)$/iu;
+// ─── Розница — локальный рынок, валюта всегда сом, вводится только число ──────
+const RETAIL_PRICE_RE = /^\d+(\.\d+)?$/;
 const BACK_TEXT = '◀️ Назад';
 const SKIP_TEXT = '⏭ Пропустить';
 const DONE_TEXT = '✅ Готово';
@@ -341,7 +343,7 @@ export class EditProductScene {
     getState(ctx).editingField = 'retailPrice';
     await ctx.answerCbQuery();
     await ctx.reply(
-      '💵 Введите новую цену в розницу:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
+      '💵 Введите новую цену в розницу (только число, сом проставится автоматически):\n\n_Пример: 500_',
       {
         parse_mode: 'Markdown',
         ...Markup.keyboard([[BACK_TEXT]]).resize(),
@@ -617,14 +619,14 @@ export class EditProductScene {
 
     // Цена в розницу
     if (state.editingField === 'retailPrice') {
-      if (!PRICE_RE.test(text)) {
+      if (!RETAIL_PRICE_RE.test(text)) {
         await ctx.reply(
-          '⚠️ Неверный формат. Введите цену и валюту:\n\n_Примеры: 500 сом · 1200 рубль · 15 доллар_',
+          '⚠️ Неверный формат. Введите только число:\n\n_Пример: 500_',
           { parse_mode: 'Markdown' },
         );
         return;
       }
-      await this.productsService.update(state.productId, { retailPrice: text });
+      await this.productsService.update(state.productId, { retailPrice: `${text} сом` });
       state.editingField = null;
       await removeReplyKeyboard(ctx);
       await ctx.reply('✅ Цена в розницу обновлена!');
