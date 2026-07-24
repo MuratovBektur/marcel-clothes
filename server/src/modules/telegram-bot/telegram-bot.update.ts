@@ -19,6 +19,7 @@ import { GroupService } from './group.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import { ShowroomSyncService } from './showroom-sync.service';
+import { InstagramService } from './instagram.service';
 import { ChatService } from '../chat/chat.service';
 import { ChatNotifyService } from '../chat/chat-notify.service';
 import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
@@ -34,6 +35,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     private readonly tgGroupService: TgGroupService,
     private readonly waService: WaService,
     private readonly showroomSync: ShowroomSyncService,
+    private readonly instagramService: InstagramService,
     private readonly chatService: ChatService,
     private readonly chatNotifyService: ChatNotifyService,
   ) {}
@@ -1036,6 +1038,23 @@ export class TelegramBotUpdate implements OnModuleInit {
       results.push('⚠️ WhatsApp (не подключён)');
     } else {
       results.push('⚠️ WhatsApp (группа не выбрана)');
+    }
+
+    // ── Instagram ─────────────────────────────────────────────────────────────
+    try {
+      const igResult = await this.instagramService.publish(p);
+      if (igResult) {
+        await this.productsService.update(productId, {
+          instagramMediaId: igResult.mediaId,
+          instagramPermalink: igResult.permalink,
+        });
+        results.push('✅ Instagram');
+      } else {
+        results.push('⚠️ Instagram (не настроен)');
+      }
+    } catch (e) {
+      console.error('[Bot] Instagram publish error:', e);
+      results.push('❌ Instagram (ошибка)');
     }
 
     await ctx.reply(

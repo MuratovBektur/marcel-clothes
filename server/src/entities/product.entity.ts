@@ -56,6 +56,12 @@ export class Product {
   @Column({ type: 'text', name: 'showroom_product_id', nullable: true, default: null })
   showroomProductId?: string | null;
 
+  @Column({ type: 'text', name: 'instagram_media_id', nullable: true, default: null })
+  instagramMediaId?: string | null;
+
+  @Column({ type: 'text', name: 'instagram_permalink', nullable: true, default: null })
+  instagramPermalink?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }
