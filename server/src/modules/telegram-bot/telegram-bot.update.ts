@@ -20,6 +20,7 @@ import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import { ShowroomSyncService } from './showroom-sync.service';
 import { InstagramService } from './instagram.service';
+import { FacebookService } from './facebook.service';
 import { ChatService } from '../chat/chat.service';
 import { ChatNotifyService } from '../chat/chat-notify.service';
 import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
@@ -36,6 +37,7 @@ export class TelegramBotUpdate implements OnModuleInit {
     private readonly waService: WaService,
     private readonly showroomSync: ShowroomSyncService,
     private readonly instagramService: InstagramService,
+    private readonly facebookService: FacebookService,
     private readonly chatService: ChatService,
     private readonly chatNotifyService: ChatNotifyService,
   ) {}
@@ -1055,6 +1057,23 @@ export class TelegramBotUpdate implements OnModuleInit {
     } catch (e) {
       console.error('[Bot] Instagram publish error:', e);
       results.push('❌ Instagram (ошибка)');
+    }
+
+    // ── Facebook ──────────────────────────────────────────────────────────────
+    try {
+      const fbResult = await this.facebookService.publish(p);
+      if (fbResult) {
+        await this.productsService.update(productId, {
+          facebookPostId: fbResult.postId,
+          facebookPermalink: fbResult.permalink,
+        });
+        results.push('✅ Facebook');
+      } else {
+        results.push('⚠️ Facebook (не настроен)');
+      }
+    } catch (e) {
+      console.error('[Bot] Facebook publish error:', e);
+      results.push('❌ Facebook (ошибка)');
     }
 
     await ctx.reply(

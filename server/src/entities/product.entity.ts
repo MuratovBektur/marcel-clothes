@@ -62,6 +62,12 @@ export class Product {
   @Column({ type: 'text', name: 'instagram_permalink', nullable: true, default: null })
   instagramPermalink?: string | null;
 
+  @Column({ type: 'text', name: 'facebook_post_id', nullable: true, default: null })
+  facebookPostId?: string | null;
+
+  @Column({ type: 'text', name: 'facebook_permalink', nullable: true, default: null })
+  facebookPermalink?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

@@ -6,11 +6,11 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
 
-const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN;
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const IG_BUSINESS_ACCOUNT_ID = process.env.IG_BUSINESS_ACCOUNT_ID;
-const IG_API_VERSION = process.env.IG_GRAPH_API_VERSION ?? 'v21.0';
+const META_API_VERSION = process.env.META_GRAPH_API_VERSION ?? 'v21.0';
 const PUBLIC_URL = process.env.PUBLIC_URL ?? 'https://marcel.kg';
-const GRAPH_URL = `https://graph.facebook.com/${IG_API_VERSION}`;
+const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
 // Instagram-карусель поддерживает максимум 10 медиафайлов на пост
 const MAX_CAROUSEL_ITEMS = 10;
@@ -39,13 +39,13 @@ export class InstagramService {
   }
 
   private get isConfigured(): boolean {
-    return !!IG_ACCESS_TOKEN && !!IG_BUSINESS_ACCOUNT_ID;
+    return !!META_ACCESS_TOKEN && !!IG_BUSINESS_ACCOUNT_ID;
   }
 
   async publish(product: Product): Promise<InstagramPublishResult | null> {
     if (!this.isConfigured) {
       this.logger.warn(
-        'IG_ACCESS_TOKEN/IG_BUSINESS_ACCOUNT_ID не заданы — товар не отправлен в Instagram',
+        'META_ACCESS_TOKEN/IG_BUSINESS_ACCOUNT_ID не заданы — товар не отправлен в Instagram',
       );
       return null;
     }
@@ -72,7 +72,10 @@ export class InstagramService {
           `${GRAPH_URL}/${IG_BUSINESS_ACCOUNT_ID}/media_publish`,
           null,
           {
-            params: { creation_id: containerId, access_token: IG_ACCESS_TOKEN },
+            params: {
+              creation_id: containerId,
+              access_token: META_ACCESS_TOKEN,
+            },
           },
         ),
       );
@@ -151,7 +154,7 @@ export class InstagramService {
           params: {
             image_url: imageUrl,
             caption,
-            access_token: IG_ACCESS_TOKEN,
+            access_token: META_ACCESS_TOKEN,
           },
         },
       ),
@@ -173,7 +176,7 @@ export class InstagramService {
             params: {
               image_url: imageUrl,
               is_carousel_item: true,
-              access_token: IG_ACCESS_TOKEN,
+              access_token: META_ACCESS_TOKEN,
             },
           },
         ),
@@ -191,7 +194,7 @@ export class InstagramService {
             media_type: 'CAROUSEL',
             children: children.join(','),
             caption,
-            access_token: IG_ACCESS_TOKEN,
+            access_token: META_ACCESS_TOKEN,
           },
         },
       ),
@@ -203,7 +206,7 @@ export class InstagramService {
     for (let attempt = 0; attempt < CONTAINER_POLL_ATTEMPTS; attempt++) {
       const { data } = await firstValueFrom(
         this.http.get<{ status_code: string }>(`${GRAPH_URL}/${containerId}`, {
-          params: { fields: 'status_code', access_token: IG_ACCESS_TOKEN },
+          params: { fields: 'status_code', access_token: META_ACCESS_TOKEN },
         }),
       );
 
@@ -227,7 +230,7 @@ export class InstagramService {
     try {
       const { data } = await firstValueFrom(
         this.http.get<{ permalink?: string }>(`${GRAPH_URL}/${mediaId}`, {
-          params: { fields: 'permalink', access_token: IG_ACCESS_TOKEN },
+          params: { fields: 'permalink', access_token: META_ACCESS_TOKEN },
         }),
       );
       return data.permalink ?? null;
