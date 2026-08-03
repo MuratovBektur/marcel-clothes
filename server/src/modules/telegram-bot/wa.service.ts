@@ -6,11 +6,13 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   type WASocket,
+  type AnyMessageContent,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import * as path from 'path';
 import * as fs from 'fs';
 import { BotUserWaGroup } from '../../entities/bot-user-wa-group.entity';
+import { isVideoUrl } from '../../libs/media';
 
 interface SocketEntry {
   sock: WASocket;
@@ -266,8 +268,16 @@ export class WaService implements OnModuleInit, OnModuleDestroy {
     return `${caption}||${photos}`;
   }
 
+  // Строит сообщение Baileys для фото или видео — по расширению файла.
+  private mediaMessage(filePath: string, caption?: string): AnyMessageContent {
+    const fullPath = path.join(process.cwd(), filePath.replace(/^\//, ''));
+    return isVideoUrl(filePath)
+      ? { video: { url: fullPath }, ...(caption ? { caption } : {}) }
+      : { image: { url: fullPath }, ...(caption ? { caption } : {}) };
+  }
+
   // ─── Отправка карточки товара в WA-группу ────────────────────────────────────
-  // Порядок: сначала доп. фото, потом основная карточка с описанием.
+  // Порядок: сначала доп. фото/видео, потом основная карточка с описанием.
   async sendProductCard(
     telegramId: number,
     product: any,
@@ -282,21 +292,17 @@ export class WaService implements OnModuleInit, OnModuleDestroy {
     const extraPhotos: string[] = product.extraPhotos ?? [];
     const keys: any[] = [];
 
-    // Сначала доп. фото (без подписи)
+    // Сначала доп. фото/видео (без подписи)
     for (const photoPath of extraPhotos) {
-      const fullPath = path.join(process.cwd(), photoPath.replace(/^\//, ''));
-      const result = await entry.sock.sendMessage(group.waGroupId, {
-        image: { url: fullPath },
-      });
+      const result = await entry.sock.sendMessage(group.waGroupId, this.mediaMessage(photoPath));
       if (result?.key) keys.push(result.key);
     }
 
-    // Потом основное фото с карточкой товара
-    const mainPhotoPath = path.join(process.cwd(), product.photos[0].replace(/^\//, ''));
-    const mainResult = await entry.sock.sendMessage(group.waGroupId, {
-      image: { url: mainPhotoPath },
-      caption,
-    });
+    // Потом основное медиа с карточкой товара
+    const mainResult = await entry.sock.sendMessage(
+      group.waGroupId,
+      this.mediaMessage(product.photos[0], caption),
+    );
     if (mainResult?.key) keys.push(mainResult.key);
 
     return { groupId: group.waGroupId, keys, contentHash: this.contentHash(product) };

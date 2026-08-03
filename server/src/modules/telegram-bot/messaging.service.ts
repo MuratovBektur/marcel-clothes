@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Injectable } from '@nestjs/common';
 import { ProductsService } from '../products/products.service';
+import { isVideoUrl } from '../../libs/media';
 
 @Injectable()
 export class TgGroupService {
@@ -31,30 +32,30 @@ export class TgGroupService {
     );
   }
 
-  private photoSource(photoPath: string) {
-    return { source: fs.createReadStream(path.join(process.cwd(), photoPath.replace(/^\//, ''))) };
+  private mediaSource(filePath: string) {
+    return { source: fs.createReadStream(path.join(process.cwd(), filePath.replace(/^\//, ''))) };
   }
 
-  // Порядок: сначала доп. фото, потом основная карточка с описанием (последней).
+  // Порядок: сначала доп. фото/видео, потом основная карточка с описанием (последней).
   async sendProductCard(telegram: any, chatId: number, product: any): Promise<number[]> {
     const caption = this.buildCaption(product);
     const extraPhotos: string[] = product.extraPhotos ?? [];
-    // Extra first, main photo last
-    const orderedPhotos: string[] = [...extraPhotos, product.photos[0]];
+    // Extra first, main media last
+    const ordered: string[] = [...extraPhotos, product.photos[0]];
 
-    if (orderedPhotos.length === 1) {
-      const msg = await telegram.sendPhoto(chatId, this.photoSource(product.photos[0]), {
-        caption,
-        parse_mode: 'HTML',
-      });
+    if (ordered.length === 1) {
+      const url = product.photos[0];
+      const msg = isVideoUrl(url)
+        ? await telegram.sendVideo(chatId, this.mediaSource(url), { caption, parse_mode: 'HTML' })
+        : await telegram.sendPhoto(chatId, this.mediaSource(url), { caption, parse_mode: 'HTML' });
       return [msg.message_id];
     }
 
-    const mediaGroup = orderedPhotos.map((p, i) => ({
-      type: 'photo' as const,
-      media: this.photoSource(p),
-      // Caption only on last photo (main card)
-      ...(i === orderedPhotos.length - 1 ? { caption, parse_mode: 'HTML' as const } : {}),
+    const mediaGroup = ordered.map((p, i) => ({
+      type: isVideoUrl(p) ? ('video' as const) : ('photo' as const),
+      media: this.mediaSource(p),
+      // Caption only on last item (main card)
+      ...(i === ordered.length - 1 ? { caption, parse_mode: 'HTML' as const } : {}),
     }));
     const messages = await telegram.sendMediaGroup(chatId, mediaGroup);
     return messages.map((m: any) => m.message_id);

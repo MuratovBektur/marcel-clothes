@@ -4,7 +4,7 @@
       <video
         v-if="isVideo(images[activeIndex])"
         :key="'main-' + images[activeIndex]"
-        :src="images[activeIndex]"
+        :src="imgVariant(images[activeIndex], 'gallery')"
         autoplay
         muted
         loop
@@ -35,7 +35,7 @@
       >
         <video
           v-if="isVideo(url)"
-          :src="url"
+          :src="imgVariant(url, 'thumb')"
           muted
           playsinline
           class="product-gallery__thumb-img"
@@ -49,7 +49,7 @@
 
 <script setup>
 import { ref } from 'vue';
-import { imgVariant } from '~/libs/image-variants';
+import { imgVariant, isVideoUrl as isVideo } from '~/libs/image-variants';
 
 defineProps({
   images: { type: Array, required: true },
@@ -58,13 +58,6 @@ defineProps({
 });
 
 const activeIndex = ref(0);
-
-// Функция определения видео
-function isVideo(url) {
-  if (!url) return false;
-  const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
-  return videoExtensions.some((ext) => url.toLowerCase().endsWith(ext));
-}
 </script>
 
 <style lang="scss" scoped>

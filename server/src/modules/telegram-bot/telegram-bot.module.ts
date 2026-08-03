@@ -24,6 +24,9 @@ import { BotAuthorizedUser } from '../../entities/bot-authorized-user.entity';
 import { AllowedPhone } from '../../entities/allowed-phone.entity';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+// Свой сервер telegram-bot-api вместо облачного api.telegram.org — снимает
+// лимит в 20 МБ на скачивание/загрузку файлов (до 2000 МБ). См. .env.example.
+const TELEGRAM_BOT_API_ROOT = process.env.TELEGRAM_BOT_API_ROOT;
 
 if (!TELEGRAM_BOT_TOKEN) {
   throw new Error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
@@ -34,6 +37,9 @@ if (!TELEGRAM_BOT_TOKEN) {
     TelegrafModule.forRoot({
       token: TELEGRAM_BOT_TOKEN,
       middlewares: [session()],
+      options: TELEGRAM_BOT_API_ROOT
+        ? { telegram: { apiRoot: TELEGRAM_BOT_API_ROOT } }
+        : undefined,
     }),
     TypeOrmModule.forFeature([BotUserGroup, BotUserWaGroup, BotAuthorizedUser, AllowedPhone]),
     ProductsModule,

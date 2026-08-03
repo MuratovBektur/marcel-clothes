@@ -1,8 +1,8 @@
 import { Action, Ctx, On, Scene, SceneEnter } from 'nestjs-telegraf';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Markup } from 'telegraf';
 import { ProductsService } from '../products/products.service';
-import { FileStorageService } from './file-storage.service';
+import { checkMediaSize, FileStorageService, MediaDownloadError, SavedMedia, TgMediaRef } from './file-storage.service';
 import { TgGroupService } from './messaging.service';
 import { WaService } from './wa.service';
 import {
@@ -37,6 +37,9 @@ interface EditState {
   waitingForCustom: 'material' | 'color' | null;
   editingType: boolean;
   newExtraPhotos: string[];
+  // Доп. видео, которые ещё обрабатываются в фоне — их URL появятся и будут
+  // добавлены в extraPhotos, когда фон закончит (см. attachExtraVideosWhenReady).
+  pendingExtraVideos: Promise<string>[];
 }
 
 function getState(ctx: any): EditState {
@@ -53,6 +56,10 @@ function toggle(arr: string[], value: string) {
   const i = arr.indexOf(value);
   if (i === -1) arr.push(value);
   else arr.splice(i, 1);
+}
+
+function mediaErrorMessage(err: unknown): string {
+  return err instanceof MediaDownloadError ? err.message : 'Не удалось сохранить медиафайл.';
 }
 
 function multiSelectMarkup(
@@ -99,9 +106,10 @@ async function removeReplyKeyboard(ctx: any) {
 @Injectable()
 @Scene(EDIT_SCENE_ID)
 export class EditProductScene {
+  private readonly logger = new Logger(EditProductScene.name);
   private readonly mediaGroupBuffers = new Map<
     string,
-    { fileIds: string[]; timer: ReturnType<typeof setTimeout>; latestCtx: any }
+    { items: TgMediaRef[]; timer: ReturnType<typeof setTimeout>; latestCtx: any }
   >();
 
   constructor(
@@ -135,6 +143,7 @@ export class EditProductScene {
       waitingForCustom: null,
       editingType: false,
       newExtraPhotos: [],
+      pendingExtraVideos: [],
     } satisfies EditState);
 
     await removeReplyKeyboard(ctx);
@@ -150,6 +159,7 @@ export class EditProductScene {
     state.waitingForCustom = null;
     state.editingType = false;
     state.newExtraPhotos = [];
+    state.pendingExtraVideos = [];
 
     if (!product) {
       product = await this.productsService.findOne(state.productId);
@@ -170,7 +180,7 @@ export class EditProductScene {
       (product.additionalDescription
         ? `📋 *Доп. описание:* ${product.additionalDescription}\n`
         : '📋 Доп. описание: —\n') +
-      `📷 *Доп. фото:* ${product.extraPhotos?.length ?? 0} шт.\n` +
+      `📷 *Доп. фото/видео:* ${product.extraPhotos?.length ?? 0} шт.\n` +
       `\n_Выберите поле для изменения:_`;
 
     await ctx.reply(text, {
@@ -189,8 +199,8 @@ export class EditProductScene {
         [Markup.button.callback('📝 Описание', 'ef:description')],
         [Markup.button.callback('📋 Доп. описание', 'ef:additionalDescription')],
         [
-          Markup.button.callback('📸 Главное фото', 'ef:photo'),
-          Markup.button.callback('📷 Доп. фото', 'ef:extra_photos'),
+          Markup.button.callback('📸 Главное фото/видео', 'ef:photo'),
+          Markup.button.callback('📷 Доп. фото/видео', 'ef:extra_photos'),
         ],
         [Markup.button.callback('✅ Закрыть редактирование', 'ef:done')],
       ]),
@@ -254,6 +264,7 @@ export class EditProductScene {
     state.waitingForCustom = null;
     state.editingType = false;
     state.newExtraPhotos = [];
+    state.pendingExtraVideos = [];
     await ctx.answerCbQuery('◀️');
     await this.showEditMenu(ctx);
   }
@@ -470,7 +481,7 @@ export class EditProductScene {
   async onEditPhoto(@Ctx() ctx: any) {
     getState(ctx).editingField = 'photo';
     await ctx.answerCbQuery();
-    await ctx.reply('📸 Отправьте новое главное фото:', {
+    await ctx.reply('📸 Отправьте новое главное фото или видео:', {
       ...Markup.keyboard([[BACK_TEXT]]).resize(),
     });
   }
@@ -484,11 +495,11 @@ export class EditProductScene {
     const count = product?.extraPhotos?.length ?? 0;
     await ctx.answerCbQuery();
     await ctx.reply(
-      `📷 *Доп. фото* — сейчас: ${count} шт. (макс. ${MAX_EXTRA_PHOTOS})\n\nЧто сделать?`,
+      `📷 *Доп. фото/видео* — сейчас: ${count} шт. (макс. ${MAX_EXTRA_PHOTOS})\n\nЧто сделать?`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('➕ Добавить фото', 'ef_extra_add')],
+          [Markup.button.callback('➕ Добавить фото/видео', 'ef_extra_add')],
           [Markup.button.callback('🗑 Очистить все', 'ef_extra_clear')],
           [Markup.button.callback('◀️ Назад', BACK_CB)],
         ]),
@@ -501,9 +512,10 @@ export class EditProductScene {
     const state = getState(ctx);
     state.editingField = 'extra_photos';
     state.newExtraPhotos = [];
+    state.pendingExtraVideos = [];
     await ctx.answerCbQuery();
     await ctx.reply(
-      `📷 Отправьте фото — по одному или сразу альбомом.\nНажмите *"${DONE_TEXT}"* когда закончите.`,
+      `📷 Отправьте фото или видео — по одному или сразу альбомом.\nНажмите *"${DONE_TEXT}"* когда закончите.`,
       {
         parse_mode: 'Markdown',
         ...Markup.keyboard([[BACK_TEXT, DONE_TEXT]]).resize(),
@@ -532,6 +544,7 @@ export class EditProductScene {
       state.waitingForCustom = null;
       state.editingType = false;
       state.newExtraPhotos = [];
+      state.pendingExtraVideos = [];
       await removeReplyKeyboard(ctx);
       await this.showEditMenu(ctx);
       return;
@@ -539,18 +552,25 @@ export class EditProductScene {
 
     // Доп. фото — завершение
     if (text === DONE_TEXT && state.editingField === 'extra_photos') {
-      if (!state.newExtraPhotos.length) {
-        await ctx.reply(`Сначала отправьте хотя бы одно фото или нажмите "${BACK_TEXT}".`);
+      if (!state.newExtraPhotos.length && !state.pendingExtraVideos.length) {
+        await ctx.reply(`Сначала отправьте хотя бы одно фото или видео, или нажмите "${BACK_TEXT}".`);
         return;
       }
       const product = await this.productsService.findOne(state.productId);
       const combined = [...(product?.extraPhotos ?? []), ...state.newExtraPhotos];
       await this.productsService.update(state.productId, { extraPhotos: combined });
+      const pendingVideos = state.pendingExtraVideos;
       state.editingField = null;
       state.newExtraPhotos = [];
+      state.pendingExtraVideos = [];
       await removeReplyKeyboard(ctx);
-      await ctx.reply(`✅ Доп. фото добавлены (всего: ${combined.length})!`);
+      await ctx.reply(
+        pendingVideos.length
+          ? `✅ Доп. фото добавлены (всего: ${combined.length})! Видео (${pendingVideos.length}) обрабатывается в фоновом режиме — появится на сайте по готовности.`
+          : `✅ Доп. фото добавлены (всего: ${combined.length})!`,
+      );
       await this.showEditMenu(ctx);
+      if (pendingVideos.length) this.attachExtraVideosWhenReady(ctx, state.productId, pendingVideos);
       return;
     }
 
@@ -655,71 +675,129 @@ export class EditProductScene {
     }
   }
 
-  // ═══ Обработка фото ════════════════════════════════════════════════════════════
+  // ═══ Обработка фото/видео ═══════════════════════════════════════════════════════
 
   @On('photo')
   async onPhoto(@Ctx() ctx: any) {
-    const state = getState(ctx);
     const photo = ctx.message?.photo;
     if (!photo?.length) return;
     const fileId: string = photo[photo.length - 1].file_id;
+    await this.handleIncomingMedia(ctx, fileId, 'photo');
+  }
+
+  @On('video')
+  async onVideo(@Ctx() ctx: any) {
+    const video = ctx.message?.video;
+    if (!video) return;
+    const state = getState(ctx);
+    // Проверяем лимит мгновенно (video.file_size уже есть в самом сообщении,
+    // без доп. запроса) — но только если видео вообще куда-то пойдёт, иначе
+    // не мешаем посторонним видео (handleIncomingMedia тут молча игнорит их).
+    if (state.editingField === 'photo' || state.editingField === 'extra_photos') {
+      const sizeError = checkMediaSize(video.file_size);
+      if (sizeError) {
+        await ctx.reply(`❌ ${sizeError}\n\nОтправьте другой файл.`);
+        return;
+      }
+    }
+    await this.handleIncomingMedia(ctx, video.file_id as string, 'video');
+  }
+
+  private async handleIncomingMedia(ctx: any, fileId: string, kind: 'photo' | 'video') {
+    const state = getState(ctx);
 
     if (state.editingField === 'photo') {
-      const photoUrl = await this.fileStorage.saveFromFileId(fileId);
-      await this.productsService.update(state.productId, { photos: [photoUrl] });
+      let media: SavedMedia;
+      try {
+        media = await this.fileStorage.saveFromFileId(fileId, kind);
+      } catch (err) {
+        await ctx.reply(`❌ ${mediaErrorMessage(err)}\n\nОтправьте другое фото или видео.`);
+        return;
+      }
+      // Видео ещё не готово (обрабатывается в фоне) — на сайте пока не
+      // показываем: старое главное фото/видео остаётся как есть, подменится,
+      // когда фон закончит (attachMainVideoWhenReady).
+      if (media.url) {
+        await this.productsService.update(state.productId, { photos: [media.url] });
+      }
       state.editingField = null;
       await removeReplyKeyboard(ctx);
-      await ctx.reply('✅ Главное фото обновлено!');
+      await ctx.reply(
+        media.kind === 'video'
+          ? '✅ Главное видео принято. Обрабатывается в фоновом режиме — на сайте обновится по готовности.'
+          : '✅ Главное фото/видео обновлено!',
+      );
       await this.showEditMenu(ctx);
+      if (media.ready) this.attachMainVideoWhenReady(ctx, state.productId, media.ready);
       return;
     }
 
     if (state.editingField === 'extra_photos') {
+      const item: TgMediaRef = { fileId, kind };
       const mediaGroupId: string | undefined = ctx.message?.media_group_id;
       if (mediaGroupId) {
         const key = `${ctx.chat.id}_${mediaGroupId}`;
         const existing = this.mediaGroupBuffers.get(key);
         if (existing) {
           clearTimeout(existing.timer);
-          existing.fileIds.push(fileId);
+          existing.items.push(item);
           existing.latestCtx = ctx;
-          existing.timer = setTimeout(() => void this.flushExtraPhotosGroup(key), 800);
+          existing.timer = setTimeout(() => void this.flushExtraMediaGroup(key), 800);
         } else {
-          const timer = setTimeout(() => void this.flushExtraPhotosGroup(key), 800);
-          this.mediaGroupBuffers.set(key, { fileIds: [fileId], timer, latestCtx: ctx });
+          const timer = setTimeout(() => void this.flushExtraMediaGroup(key), 800);
+          this.mediaGroupBuffers.set(key, { items: [item], timer, latestCtx: ctx });
         }
         return;
       }
-      await this.appendExtraPhotos(ctx, state, [fileId]);
+      await this.appendExtraMedia(ctx, state, [item]);
     }
   }
 
-  private async flushExtraPhotosGroup(key: string) {
+  private async flushExtraMediaGroup(key: string) {
     const buf = this.mediaGroupBuffers.get(key);
     if (!buf) return;
     this.mediaGroupBuffers.delete(key);
     const ctx = buf.latestCtx;
     const state = getState(ctx);
     if (state.editingField !== 'extra_photos') return;
-    await this.appendExtraPhotos(ctx, state, buf.fileIds);
+    await this.appendExtraMedia(ctx, state, buf.items);
   }
 
-  private async appendExtraPhotos(ctx: any, state: EditState, fileIds: string[]) {
+  private async appendExtraMedia(ctx: any, state: EditState, items: TgMediaRef[]) {
     const product = await this.productsService.findOne(state.productId);
     const alreadySaved = product?.extraPhotos?.length ?? 0;
-    const remaining = MAX_EXTRA_PHOTOS - alreadySaved - state.newExtraPhotos.length;
+    const staged = state.newExtraPhotos.length + state.pendingExtraVideos.length;
+    const remaining = MAX_EXTRA_PHOTOS - alreadySaved - staged;
 
     if (remaining <= 0) {
-      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} доп. фото достигнут. Нажмите "${DONE_TEXT}" для сохранения.`);
+      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} доп. фото/видео достигнут. Нажмите "${DONE_TEXT}" для сохранения.`);
       return;
     }
 
-    const toAdd = fileIds.slice(0, remaining);
-    const urls = await this.fileStorage.saveMany(toAdd);
-    state.newExtraPhotos.push(...urls);
+    const toAdd = items.slice(0, remaining);
+    const failures: string[] = [];
+    const saved: SavedMedia[] = [];
+    for (const item of toAdd) {
+      try {
+        const media = await this.fileStorage.saveFromFileId(item.fileId, item.kind);
+        // Видео ещё не готово (обрабатывается в фоне) — пока не показываем на
+        // сайте, копим отдельно и добавим в extraPhotos, когда будет готово.
+        if (media.url) {
+          state.newExtraPhotos.push(media.url);
+        } else if (media.ready) {
+          state.pendingExtraVideos.push(media.ready);
+        }
+        saved.push(media);
+      } catch (err) {
+        failures.push(mediaErrorMessage(err));
+      }
+    }
 
-    const skipped = fileIds.length - toAdd.length;
-    let msg = `✅ Добавлено ${toAdd.length} фото (новых в очереди: ${state.newExtraPhotos.length}).`;
+    const skipped = items.length - toAdd.length;
+    const stagedTotal = state.newExtraPhotos.length + state.pendingExtraVideos.length;
+    let msg = `✅ Фото/видео добавлено — ${saved.length} шт. (в очереди: ${stagedTotal}).`;
+    if (state.pendingExtraVideos.length) msg += ' Видео обрабатывается в фоновом режиме.';
+    if (failures.length) msg += `\n❌ Не удалось сохранить ${failures.length}: ${failures[0]}`;
     if (skipped > 0) msg += ` Пропущено ${skipped} — лимит ${MAX_EXTRA_PHOTOS} шт.`;
     msg += ` Ещё или "${DONE_TEXT}".`;
     await ctx.reply(msg);
@@ -735,5 +813,39 @@ export class EditProductScene {
     await ctx.reply('👔 Выберите новый тип костюма:', {
       ...Markup.inlineKeyboard(buttons),
     });
+  }
+
+  // Главное видео обрабатывается в фоне и на сайте не показывается, пока не
+  // готово (старое главное фото/видео остаётся видимым до этого момента).
+  // Когда фон закончит — подключаем URL к товару и уведомляем чат.
+  private attachMainVideoWhenReady(ctx: any, productId: string, ready: Promise<string>): void {
+    const chatId = ctx.chat.id;
+    const telegram = ctx.telegram;
+    ready
+      .then(async (url) => {
+        await this.productsService.update(productId, { photos: [url] });
+        await telegram.sendMessage(chatId, '✅ Главное видео дообработано и опубликовано на сайте.');
+      })
+      .catch((err) => this.logger.error(
+        `Фоновая доперекодировка главного видео не удалась: ${err instanceof Error ? err.message : String(err)}`,
+      ));
+  }
+
+  // То же для доп. видео — добавляются в extraPhotos только когда фон
+  // закончит (перечитываем товар перед обновлением на случай параллельных правок).
+  private attachExtraVideosWhenReady(ctx: any, productId: string, pending: Promise<string>[]): void {
+    const chatId = ctx.chat.id;
+    const telegram = ctx.telegram;
+    Promise.all(pending)
+      .then(async (urls) => {
+        const product = await this.productsService.findOne(productId);
+        await this.productsService.update(productId, {
+          extraPhotos: [...(product?.extraPhotos ?? []), ...urls],
+        });
+        await telegram.sendMessage(chatId, '✅ Доп. видео дообработаны и опубликованы на сайте.');
+      })
+      .catch((err) => this.logger.error(
+        `Фоновая доперекодировка доп. видео не удалась: ${err instanceof Error ? err.message : String(err)}`,
+      ));
   }
 }

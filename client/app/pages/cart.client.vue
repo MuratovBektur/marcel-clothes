@@ -36,7 +36,9 @@
                 class="cart-item"
               >
                 <NuxtLink :to="`/product/${item.productId}`" class="cart-item__photo-wrap">
-                  <img :src="imgVariant(item.photo, 'thumb')" :alt="item.productType" class="cart-item__photo" />
+                  <video v-if="isVideoUrl(item.photo)" :src="imgVariant(item.photo, 'thumb')" autoplay muted loop
+                    playsinline class="cart-item__photo"></video>
+                  <img v-else :src="imgVariant(item.photo, 'thumb')" :alt="item.productType" class="cart-item__photo" />
                 </NuxtLink>
                 <div class="cart-item__info">
                   <NuxtLink :to="`/product/${item.productId}`" class="cart-item__name">
@@ -131,7 +133,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { imgVariant } from '~/libs/image-variants';
+import { imgVariant, isVideoUrl } from '~/libs/image-variants';
 useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] });
 
 const { cartItems, isCartHydrated, remove, increment, decrement, clear } = useCart();

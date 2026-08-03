@@ -24,6 +24,7 @@ import { FacebookService } from './facebook.service';
 import { ChatService } from '../chat/chat.service';
 import { ChatNotifyService } from '../chat/chat-notify.service';
 import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
+import { isVideoUrl } from '../../libs/media';
 
 @Update()
 export class TelegramBotUpdate implements OnModuleInit {
@@ -782,19 +783,32 @@ export class TelegramBotUpdate implements OnModuleInit {
     ]);
 
     const photoPath = path.join(process.cwd(), item.photo.replace(/^\//, ''));
+    const mediaType = isVideoUrl(item.photo) ? ('video' as const) : ('photo' as const);
 
     if (edit) {
       try {
         await ctx.editMessageMedia(
-          { type: 'photo', media: { source: fs.createReadStream(photoPath) }, caption, parse_mode: 'Markdown' },
+          { type: mediaType, media: { source: fs.createReadStream(photoPath) }, caption, parse_mode: 'Markdown' },
           keyboard,
         );
       } catch {
-        await ctx.replyWithPhoto(
-          { source: fs.createReadStream(photoPath) },
-          { caption, parse_mode: 'Markdown', ...keyboard },
-        );
+        if (mediaType === 'video') {
+          await ctx.replyWithVideo(
+            { source: fs.createReadStream(photoPath) },
+            { caption, parse_mode: 'Markdown', ...keyboard },
+          );
+        } else {
+          await ctx.replyWithPhoto(
+            { source: fs.createReadStream(photoPath) },
+            { caption, parse_mode: 'Markdown', ...keyboard },
+          );
+        }
       }
+    } else if (mediaType === 'video') {
+      await ctx.replyWithVideo(
+        { source: fs.createReadStream(photoPath) },
+        { caption, parse_mode: 'Markdown', ...keyboard },
+      );
     } else {
       await ctx.replyWithPhoto(
         { source: fs.createReadStream(photoPath) },
@@ -1122,7 +1136,7 @@ export class TelegramBotUpdate implements OnModuleInit {
       `🧵 *Материалы:* ${p.materials.join(', ')}\n🎨 *Цвета:* ${p.colors.join(', ')}\n` +
       `📏 *Размеры:* ${p.sizes.join(', ')}\n` +
       (p.description ? `📝 *Описание:* ${this.truncDesc(p.description)}\n` : '') +
-      `📷 *Доп. фото:* ${p.extraPhotos?.length ?? 0} шт.\n🆔 \`${p.id}\``;
+      `📷 *Доп. фото/видео:* ${p.extraPhotos?.length ?? 0} шт.\n🆔 \`${p.id}\``;
 
     const navRow: ReturnType<typeof Markup.button.callback>[] = [];
     if (offset > 0) navRow.push(Markup.button.callback('◀️', `card_nav:${offset - 1}`));
@@ -1136,16 +1150,20 @@ export class TelegramBotUpdate implements OnModuleInit {
     const publishRow = [Markup.button.callback('📢 Опубликовать', `publish:${p.id}`)];
     const keyboard = Markup.inlineKeyboard([navRow, actionRow, publishRow]);
 
-    const photoPath = path.join(process.cwd(), p.photos[0].replace(/^\//, ''));
-    const photoSource = { source: fs.createReadStream(photoPath) };
+    const mainPath = p.photos[0];
+    const mediaPath = path.join(process.cwd(), mainPath.replace(/^\//, ''));
+    const mediaSource = { source: fs.createReadStream(mediaPath) };
+    const mediaType = isVideoUrl(mainPath) ? ('video' as const) : ('photo' as const);
 
     if (edit) {
       await ctx.editMessageMedia(
-        { type: 'photo', media: photoSource, caption, parse_mode: 'Markdown' },
+        { type: mediaType, media: mediaSource, caption, parse_mode: 'Markdown' },
         keyboard,
       );
+    } else if (mediaType === 'video') {
+      await ctx.replyWithVideo(mediaSource, { caption, parse_mode: 'Markdown', ...keyboard });
     } else {
-      await ctx.replyWithPhoto(photoSource, { caption, parse_mode: 'Markdown', ...keyboard });
+      await ctx.replyWithPhoto(mediaSource, { caption, parse_mode: 'Markdown', ...keyboard });
     }
   }
 }

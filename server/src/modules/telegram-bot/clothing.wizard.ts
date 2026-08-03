@@ -6,10 +6,10 @@ import {
   WizardStep,
   Message,
 } from 'nestjs-telegraf';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Markup } from 'telegraf';
 import { ProductsService } from '../products/products.service';
-import { FileStorageService } from './file-storage.service';
+import { checkMediaSize, FileStorageService, MediaDownloadError, SavedMedia, TgMediaRef } from './file-storage.service';
 import { CustomOptionsService } from './custom-options.service';
 import { ShowroomSyncService } from './showroom-sync.service';
 import {
@@ -55,10 +55,10 @@ const extraPhotosKeyboard = Markup.keyboard([[BACK_TEXT], [SKIP_TEXT, DONE_TEXT]
 // 3 = Цена в розницу       (text через WizardStep(3))
 // 4 = Материалы            (inline, multi + text)
 // 5 = Цвета                (inline, multi + text)
-// 6 = Главное фото         (WizardStep(6))
+// 6 = Главное фото/видео   (WizardStep(6))
 // 7 = Описание             (WizardStep(7))
 // 8 = Доп. описание        (WizardStep(8))
-// 9 = Доп. фото            (WizardStep(9))
+// 9 = Доп. фото/видео      (WizardStep(9))
 
 // ─── State ────────────────────────────────────────────────────────────────────
 interface WizardState {
@@ -68,8 +68,8 @@ interface WizardState {
   selectedAgeCategories: string[];
   selectedMaterials: string[];
   selectedColors: string[];
-  mainPhoto: string | null;
-  extraPhotos: string[];
+  mainPhoto: TgMediaRef | null;
+  extraPhotos: TgMediaRef[];
 }
 
 function getState(ctx: any): WizardState {
@@ -91,6 +91,8 @@ function getState(ctx: any): WizardState {
 @Injectable()
 @Wizard(CLOTHING_WIZARD_ID)
 export class ClothingWizard {
+  private readonly logger = new Logger(ClothingWizard.name);
+
   constructor(
     private readonly productsService: ProductsService,
     private readonly fileStorage: FileStorageService,
@@ -484,7 +486,7 @@ export class ClothingWizard {
     );
   }
 
-  // Шаг 6: Главное фото
+  // Шаг 6: Главное фото или видео
   @WizardStep(6)
   async onMainPhotoStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
@@ -496,7 +498,6 @@ export class ClothingWizard {
 
     if (msg?.text === BACK_TEXT) {
       state.mainPhoto = null;
-      state.submission.photos = undefined;
       ctx.wizard.cursor = 5;
       await removeReplyKeyboard(ctx);
       await sendColorsKeyboard(ctx, this.customOptions.getOptions('colors'), state.selectedColors);
@@ -505,22 +506,39 @@ export class ClothingWizard {
 
     if (msg?.text === DONE_TEXT) {
       if (!state.mainPhoto) {
-        await ctx.reply('📸 Сначала отправьте главное фото.', mainPhotoKeyboard);
+        await ctx.reply('📸 Сначала отправьте главное фото или видео.', mainPhotoKeyboard);
         return;
       }
-      state.submission.photos = [state.mainPhoto];
       ctx.wizard.next();
       await sendDescriptionPrompt(ctx);
       return;
     }
 
     const photo = msg?.photo;
-    if (!photo) {
-      await ctx.reply(`Пожалуйста, отправьте фото или нажмите "${DONE_TEXT}".`, mainPhotoKeyboard);
+    const video = msg?.video;
+    if (!photo && !video) {
+      await ctx.reply(`Пожалуйста, отправьте фото или видео, или нажмите "${DONE_TEXT}".`, mainPhotoKeyboard);
       return;
     }
-    state.mainPhoto = photo[photo.length - 1].file_id as string;
-    await ctx.reply(`✅ Главное фото добавлено. Нажмите *"${DONE_TEXT}"* для продолжения.`, {
+
+    if (video) {
+      // Telegram уже присылает file_size прямо в сообщении — проверяем лимит
+      // мгновенно, без единого сетевого запроса, до скачивания байтов.
+      const sizeError = checkMediaSize(video.file_size);
+      if (sizeError) {
+        await ctx.reply(`❌ ${sizeError}\n\nОтправьте другой файл.`, mainPhotoKeyboard);
+        return;
+      }
+      state.mainPhoto = { fileId: video.file_id as string, kind: 'video' };
+      await ctx.reply(
+        `✅ Главное фото/видео добавлено. Видео обрабатывается в фоновом режиме — появится на сайте по готовности. Нажмите *"${DONE_TEXT}"* для продолжения.`,
+        { parse_mode: 'Markdown', ...mainPhotoKeyboard },
+      );
+      return;
+    }
+
+    state.mainPhoto = { fileId: photo[photo.length - 1].file_id as string, kind: 'photo' };
+    await ctx.reply(`✅ Главное фото/видео добавлено. Нажмите *"${DONE_TEXT}"* для продолжения.`, {
       parse_mode: 'Markdown',
       ...mainPhotoKeyboard,
     });
@@ -591,7 +609,7 @@ export class ClothingWizard {
     await sendExtraPhotosPrompt(ctx);
   }
 
-  // Шаг 9: Дополнительные фото
+  // Шаг 9: Дополнительные фото или видео
   @WizardStep(9)
   async onExtraPhotosStep(@Ctx() ctx: any, @Message() msg: any) {
     const state = getState(ctx);
@@ -603,7 +621,6 @@ export class ClothingWizard {
 
     if (msg?.text === BACK_TEXT) {
       state.mainPhoto = null;
-      state.submission.photos = undefined;
       ctx.wizard.cursor = 8;
       await removeReplyKeyboard(ctx);
       await sendAdditionalDescriptionPrompt(ctx);
@@ -611,22 +628,37 @@ export class ClothingWizard {
     }
 
     if (msg?.text === SKIP_TEXT || msg?.text === DONE_TEXT) {
-      state.submission.extraPhotos = [...state.extraPhotos];
       await this.finish(ctx, state);
       return;
     }
 
     const photo = msg?.photo;
-    if (!photo) {
-      await ctx.reply(`Отправьте фото или нажмите "${SKIP_TEXT}".`, extraPhotosKeyboard);
+    const video = msg?.video;
+    if (!photo && !video) {
+      await ctx.reply(`Отправьте фото или видео, или нажмите "${SKIP_TEXT}".`, extraPhotosKeyboard);
       return;
     }
     if (state.extraPhotos.length >= MAX_EXTRA_PHOTOS) {
-      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} фото. Нажмите "${DONE_TEXT}" для завершения.`, extraPhotosKeyboard);
+      await ctx.reply(`Максимум ${MAX_EXTRA_PHOTOS} файлов. Нажмите "${DONE_TEXT}" для завершения.`, extraPhotosKeyboard);
       return;
     }
-    state.extraPhotos.push(photo[photo.length - 1].file_id as string);
-    await ctx.reply(`✅ Фото добавлено (${state.extraPhotos.length}/${MAX_EXTRA_PHOTOS}). Ещё или "${DONE_TEXT}".`, extraPhotosKeyboard);
+
+    if (video) {
+      const sizeError = checkMediaSize(video.file_size);
+      if (sizeError) {
+        await ctx.reply(`❌ ${sizeError}\n\nОтправьте другой файл или нажмите "${SKIP_TEXT}".`, extraPhotosKeyboard);
+        return;
+      }
+      state.extraPhotos.push({ fileId: video.file_id as string, kind: 'video' });
+      await ctx.reply(
+        `✅ Фото/видео добавлено (${state.extraPhotos.length}/${MAX_EXTRA_PHOTOS}). Видео обрабатывается в фоновом режиме — появится на сайте по готовности. Ещё или "${DONE_TEXT}".`,
+        extraPhotosKeyboard,
+      );
+      return;
+    }
+
+    state.extraPhotos.push({ fileId: photo[photo.length - 1].file_id as string, kind: 'photo' });
+    await ctx.reply(`✅ Фото/видео добавлено (${state.extraPhotos.length}/${MAX_EXTRA_PHOTOS}). Ещё или "${DONE_TEXT}".`, extraPhotosKeyboard);
   }
 
   // ─── Показать шаг по номеру (навигация Назад) ─────────────────────────────────
@@ -645,8 +677,15 @@ export class ClothingWizard {
   }
 
   // ─── Итог ─────────────────────────────────────────────────────────────────────
+  // Ничего не скачивает синхронно — отвечает админу МГНОВЕННО (никакого
+  // ожидания сети/обработки) и уходит из сценария сразу, а всё скачивание
+  // медиа + создание товара делает в фоне (см. processProductCreation).
+  // Ошибки теперь сообщаются отдельным сообщением в чат, а не возвратом в
+  // мастер — если что-то не сохранилось, товар придётся добавить заново.
   private async finish(ctx: any, state: WizardState) {
     const s = state.submission;
+    const mainMedia = state.mainPhoto!;
+    const extraMediaRefs = [...state.extraPhotos];
 
     const lastMsgId: number = ctx.message?.message_id ?? 0;
     const firstId = ctx.session.__wizFirstMsgId as number | undefined;
@@ -658,10 +697,7 @@ export class ClothingWizard {
       await Promise.all(ids.map(tryDel));
     }
 
-    const photoUrls = await this.fileStorage.saveMany(s.photos ?? []);
-    const extraPhotoUrls = await this.fileStorage.saveMany(s.extraPhotos ?? []);
-
-    const saved = await this.productsService.create({
+    const productData = {
       gender: s.gender!,
       type: s.type!,
       wholesalePrice: s.wholesalePrice!,
@@ -671,10 +707,88 @@ export class ClothingWizard {
       sizes: s.sizes ?? [],
       description: s.description ?? null,
       additionalDescription: s.additionalDescription ?? null,
-      photos: photoUrls,
-      extraPhotos: extraPhotoUrls,
+    };
+
+    const hasVideo = mainMedia.kind === 'video' || extraMediaRefs.some((m) => m.kind === 'video');
+    await ctx.reply(
+      hasVideo
+        ? `⏳ Товар «${s.type}» создаётся. Видео обрабатывается в фоновом режиме — появится на сайте и здесь же по готовности.`
+        : `⏳ Товар «${s.type}» создаётся...`,
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    await ctx.scene.leave();
+
+    this.processProductCreation(ctx, productData, mainMedia, extraMediaRefs, s).catch((err) => {
+      this.logger.error(
+        `Неожиданная ошибка при создании товара «${s.type}»: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  }
+
+  // Скачивает главное медиа, создаёт товар, как только оно готово (видео —
+  // после фоновой перекодировки, фото — сразу), публикует карточку-превью, и
+  // отдельно, независимо, дообрабатывает доп. медиа (см.
+  // processExtraMediaInBackground) — товар не ждёт доп. фото/видео.
+  private async processProductCreation(
+    ctx: any,
+    productData: Omit<Parameters<ProductsService['create']>[0], 'photos' | 'extraPhotos'>,
+    mainMedia: TgMediaRef,
+    extraMediaRefs: TgMediaRef[],
+    s: Partial<ClothingSubmission>,
+  ): Promise<void> {
+    const chatId = ctx.chat.id;
+    const telegram = ctx.telegram;
+
+    let mainSaved: SavedMedia;
+    try {
+      [mainSaved] = await this.fileStorage.saveMany([mainMedia]);
+    } catch (err) {
+      this.logger.error(
+        `Не удалось сохранить главное медиа товара «${s.type}»: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      await telegram.sendMessage(
+        chatId,
+        `❌ Не удалось создать товар «${s.type}»: ${mediaErrorMessage(err)}. Попробуйте добавить товар заново.`,
+      ).catch(() => {});
+      return;
+    }
+
+    let mainUrl: string;
+    try {
+      mainUrl = mainSaved.url ?? await mainSaved.ready!;
+    } catch (err) {
+      this.logger.error(
+        `Не удалось обработать главное видео товара «${s.type}»: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      await telegram.sendMessage(
+        chatId,
+        `❌ Не удалось обработать видео товара «${s.type}». Попробуйте добавить товар заново.`,
+      ).catch(() => {});
+      return;
+    }
+
+    const saved = await this.productsService.create({
+      ...productData,
+      photos: [mainUrl],
+      extraPhotos: [],
     });
 
+    await this.announceProduct(ctx, saved, mainMedia, s, extraMediaRefs.length);
+
+    if (extraMediaRefs.length) {
+      this.processExtraMediaInBackground(ctx, saved.id, extraMediaRefs, s.type!);
+    }
+  }
+
+  // Синхронизация с маркетом + карточка-превью с кнопками. extraCount —
+  // сколько доп. медиа ЗАДУМАНО (они ещё могут обрабатываться в фоне).
+  private async announceProduct(
+    ctx: any,
+    saved: Awaited<ReturnType<ProductsService['create']>>,
+    mainMedia: TgMediaRef,
+    s: Partial<ClothingSubmission>,
+    extraCount: number,
+  ): Promise<void> {
     const showroomProductId = await this.showroomSync.sync(saved);
     if (showroomProductId) {
       await this.productsService.update(saved.id, { showroomProductId });
@@ -700,12 +814,12 @@ export class ClothingWizard {
       `📏 *Размеры:* ${s.sizes?.join(', ')}\n` +
       (descPreview ? `📝 *Описание:* ${descPreview}\n` : '') +
       (addDescPreview ? `📋 *Доп. описание:* ${addDescPreview}\n` : '') +
-      `📷 *Доп. фото:* ${extraPhotoUrls.length}\n` +
+      `📷 *Доп. фото/видео:* ${extraCount}\n` +
       `🆔 ID: \`${saved.id}\``;
 
-    await ctx.replyWithPhoto(s.photos![0], {
+    const previewOpts = {
       caption,
-      parse_mode: 'Markdown',
+      parse_mode: 'Markdown' as const,
       reply_markup: {
         inline_keyboard: [
           [
@@ -715,9 +829,65 @@ export class ClothingWizard {
           [{ text: '📢 Опубликовать', callback_data: `publish:${saved.id}` }],
         ],
       },
-    });
-    await ctx.reply('Выберите действие:', { reply_markup: MAIN_KEYBOARD });
-    await ctx.scene.leave();
+    };
+    if (mainMedia.kind === 'video') {
+      await ctx.replyWithVideo(mainMedia.fileId, previewOpts);
+    } else {
+      await ctx.replyWithPhoto(mainMedia.fileId, previewOpts);
+    }
+  }
+
+  // Доп. медиа — полностью независимо от главного и друг от друга (параллельно):
+  // товар их не ждёт, они просто дописываются в extraPhotos по мере готовности.
+  private processExtraMediaInBackground(
+    ctx: any,
+    productId: string,
+    extraMediaRefs: TgMediaRef[],
+    productType: string,
+  ): void {
+    const chatId = ctx.chat.id;
+    const telegram = ctx.telegram;
+
+    const run = async () => {
+      const results = await Promise.allSettled(
+        extraMediaRefs.map((ref) => this.fileStorage.saveFromFileId(ref.fileId, ref.kind)),
+      );
+
+      const readyUrls: string[] = [];
+      const videoReady: Promise<string>[] = [];
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          const reason = result.reason;
+          this.logger.error(
+            `Не удалось сохранить доп. медиа товара «${productType}»: ${reason instanceof Error ? reason.message : String(reason)}`,
+          );
+          continue;
+        }
+        const media = result.value;
+        if (media.url) readyUrls.push(media.url);
+        else if (media.ready) videoReady.push(media.ready);
+      }
+
+      if (readyUrls.length) {
+        const product = await this.productsService.findOne(productId);
+        await this.productsService.update(productId, {
+          extraPhotos: [...(product?.extraPhotos ?? []), ...readyUrls],
+        });
+      }
+
+      if (videoReady.length) {
+        const urls = await Promise.all(videoReady);
+        const product = await this.productsService.findOne(productId);
+        await this.productsService.update(productId, {
+          extraPhotos: [...(product?.extraPhotos ?? []), ...urls],
+        });
+        await telegram.sendMessage(chatId, `✅ Доп. видео товара «${productType}» дообработаны и опубликованы на сайте.`);
+      }
+    };
+
+    run().catch((err) => this.logger.error(
+      `Фоновая обработка доп. медиа товара «${productType}» не удалась: ${err instanceof Error ? err.message : String(err)}`,
+    ));
   }
 }
 
@@ -733,6 +903,10 @@ function toggle(arr: string[], value: string) {
   const i = arr.indexOf(value);
   if (i === -1) arr.push(value);
   else arr.splice(i, 1);
+}
+
+function mediaErrorMessage(err: unknown): string {
+  return err instanceof MediaDownloadError ? err.message : 'Не удалось сохранить медиафайл.';
 }
 
 function multiSelectMarkup(
@@ -831,7 +1005,7 @@ async function sendColorsKeyboard(ctx: any, items: string[], selected: string[])
 
 async function sendMainPhotoPrompt(ctx: any) {
   await ctx.reply(
-    '📸 *Шаг 7 из 10* — Отправьте главное фото товара:\n_Одно фото_',
+    '📸 *Шаг 7 из 10* — Отправьте главное фото или видео товара:\n_Один файл_',
     { parse_mode: 'Markdown', ...mainPhotoKeyboard },
   );
 }
@@ -852,7 +1026,7 @@ async function sendAdditionalDescriptionPrompt(ctx: any) {
 
 async function sendExtraPhotosPrompt(ctx: any) {
   await ctx.reply(
-    `📷 *Шаг 10 из 10* — Дополнительные фото (до ${MAX_EXTRA_PHOTOS}):\n_Необязательно_`,
+    `📷 *Шаг 10 из 10* — Дополнительные фото/видео (до ${MAX_EXTRA_PHOTOS}):\n_Необязательно_`,
     { parse_mode: 'Markdown', ...extraPhotosKeyboard },
   );
 }

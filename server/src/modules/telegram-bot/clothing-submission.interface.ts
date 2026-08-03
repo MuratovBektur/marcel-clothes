@@ -6,8 +6,6 @@ export interface ClothingSubmission {
   materials: string[];
   colors: string[];
   sizes: string[];
-  photos: string[];
-  extraPhotos: string[];
   description?: string;
   additionalDescription?: string;
 }

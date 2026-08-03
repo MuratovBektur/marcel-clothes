@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
+import { isVideoUrl } from '../../libs/media';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
@@ -13,6 +14,11 @@ const PUBLIC_URL = process.env.PUBLIC_URL ?? 'https://marcel.kg';
 const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
 const MAX_PHOTOS_PER_POST = 10;
+
+interface MediaRef {
+  url: string;
+  isVideo: boolean;
+}
 
 export interface FacebookPublishResult {
   postId: string;
@@ -57,15 +63,15 @@ export class FacebookService {
         .filter(Boolean)
         .slice(0, MAX_PHOTOS_PER_POST);
 
-      const imageUrls = await Promise.all(
-        localPaths.map((p) => this.toPublicJpegUrl(p)),
+      const mediaItems = await Promise.all(
+        localPaths.map((p) => this.toPublicMediaUrl(p)),
       );
       const caption = this.buildCaption(product);
 
       const postId =
-        imageUrls.length === 1
-          ? await this.publishSinglePhoto(imageUrls[0], caption, pageToken)
-          : await this.publishMultiPhoto(imageUrls, caption, pageToken);
+        mediaItems.length === 1
+          ? await this.publishSingleMedia(mediaItems[0], caption, pageToken)
+          : await this.publishMultiMedia(mediaItems, caption, pageToken);
 
       this.logger.log(`Опубликовано на Facebook: ${postId}`);
       return { postId, permalink: `https://www.facebook.com/${postId}` };
@@ -125,35 +131,73 @@ export class FacebookService {
     return `${PUBLIC_URL}/uploads/products/facebook/${jpegName}`;
   }
 
-  private async publishSinglePhoto(
-    imageUrl: string,
+  // Видео отдаём Graph API как есть (уже публично доступный .mp4 под /uploads) —
+  // конвертация в JPEG нужна только фото (Graph принимает по URL лишь JPEG/PNG).
+  private async toPublicMediaUrl(localPath: string): Promise<MediaRef> {
+    if (isVideoUrl(localPath)) {
+      return { url: `${PUBLIC_URL}${localPath}`, isVideo: true };
+    }
+    return { url: await this.toPublicJpegUrl(localPath), isVideo: false };
+  }
+
+  private async publishSingleMedia(
+    media: MediaRef,
     caption: string,
     pageToken: string,
   ): Promise<string> {
+    if (media.isVideo) {
+      const { data } = await firstValueFrom(
+        this.http.post<{ id: string }>(
+          `${GRAPH_URL}/${FB_PAGE_ID}/videos`,
+          null,
+          { params: { file_url: media.url, description: caption, access_token: pageToken } },
+        ),
+      );
+      return data.id;
+    }
+
     const { data } = await firstValueFrom(
       this.http.post<{ id: string; post_id?: string }>(
         `${GRAPH_URL}/${FB_PAGE_ID}/photos`,
         null,
-        { params: { url: imageUrl, caption, access_token: pageToken } },
+        { params: { url: media.url, caption, access_token: pageToken } },
       ),
     );
     return data.post_id ?? data.id;
   }
 
-  private async publishMultiPhoto(
-    imageUrls: string[],
+  private async publishMultiMedia(
+    mediaItems: MediaRef[],
     caption: string,
     pageToken: string,
   ): Promise<string> {
     const mediaIds: string[] = [];
-    for (const imageUrl of imageUrls) {
+    for (const media of mediaItems) {
+      if (media.isVideo) {
+        const { data } = await firstValueFrom(
+          this.http.post<{ id: string }>(
+            `${GRAPH_URL}/${FB_PAGE_ID}/videos`,
+            null,
+            {
+              params: {
+                file_url: media.url,
+                published: false,
+                access_token: pageToken,
+              },
+            },
+          ),
+        );
+        mediaIds.push(data.id);
+        continue;
+      }
+
       const { data } = await firstValueFrom(
         this.http.post<{ id: string }>(
           `${GRAPH_URL}/${FB_PAGE_ID}/photos`,
           null,
           {
             params: {
-              url: imageUrl,
+              url: media.url,
               published: false,
               access_token: pageToken,
             },

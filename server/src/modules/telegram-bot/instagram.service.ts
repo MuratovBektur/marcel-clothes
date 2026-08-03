@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
+import { isVideoUrl } from '../../libs/media';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const IG_BUSINESS_ACCOUNT_ID = process.env.IG_BUSINESS_ACCOUNT_ID;
@@ -16,6 +17,13 @@ const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 const MAX_CAROUSEL_ITEMS = 10;
 const CONTAINER_POLL_ATTEMPTS = 15;
 const CONTAINER_POLL_DELAY_MS = 2000;
+// Видео-контейнеры обрабатываются Instagram заметно дольше, чем фото
+const VIDEO_CONTAINER_POLL_ATTEMPTS = 45;
+
+interface MediaRef {
+  url: string;
+  isVideo: boolean;
+}
 
 export interface InstagramPublishResult {
   mediaId: string;
@@ -55,17 +63,21 @@ export class InstagramService {
         .filter(Boolean)
         .slice(0, MAX_CAROUSEL_ITEMS);
 
-      const imageUrls = await Promise.all(
-        localPaths.map((p) => this.toPublicJpegUrl(p)),
+      const mediaItems = await Promise.all(
+        localPaths.map((p) => this.toPublicMediaUrl(p)),
       );
       const caption = this.buildCaption(product);
 
       const containerId =
-        imageUrls.length === 1
-          ? await this.createSingleContainer(imageUrls[0], caption)
-          : await this.createCarouselContainer(imageUrls, caption);
+        mediaItems.length === 1
+          ? await this.createSingleContainer(mediaItems[0], caption)
+          : await this.createCarouselContainer(mediaItems, caption);
 
-      await this.waitUntilReady(containerId);
+      const hasVideo = mediaItems.some((m) => m.isVideo);
+      await this.waitUntilReady(
+        containerId,
+        hasVideo ? VIDEO_CONTAINER_POLL_ATTEMPTS : CONTAINER_POLL_ATTEMPTS,
+      );
 
       const { data } = await firstValueFrom(
         this.http.post<{ id: string }>(
@@ -142,8 +154,17 @@ export class InstagramService {
     return `${PUBLIC_URL}/uploads/products/instagram/${jpegName}`;
   }
 
+  // Видео отдаём Graph API как есть (уже публично доступный .mp4 под /uploads) —
+  // конвертация в JPEG нужна только фото (Graph принимает по URL лишь JPEG/PNG).
+  private async toPublicMediaUrl(localPath: string): Promise<MediaRef> {
+    if (isVideoUrl(localPath)) {
+      return { url: `${PUBLIC_URL}${localPath}`, isVideo: true };
+    }
+    return { url: await this.toPublicJpegUrl(localPath), isVideo: false };
+  }
+
   private async createSingleContainer(
-    imageUrl: string,
+    media: MediaRef,
     caption: string,
   ): Promise<string> {
     const { data } = await firstValueFrom(
@@ -151,11 +172,18 @@ export class InstagramService {
         `${GRAPH_URL}/${IG_BUSINESS_ACCOUNT_ID}/media`,
         null,
         {
-          params: {
-            image_url: imageUrl,
-            caption,
-            access_token: META_ACCESS_TOKEN,
-          },
+          params: media.isVideo
+            ? {
+                video_url: media.url,
+                media_type: 'REELS',
+                caption,
+                access_token: META_ACCESS_TOKEN,
+              }
+            : {
+                image_url: media.url,
+                caption,
+                access_token: META_ACCESS_TOKEN,
+              },
         },
       ),
     );
@@ -163,25 +191,35 @@ export class InstagramService {
   }
 
   private async createCarouselContainer(
-    imageUrls: string[],
+    mediaItems: MediaRef[],
     caption: string,
   ): Promise<string> {
     const children: string[] = [];
-    for (const imageUrl of imageUrls) {
+    for (const media of mediaItems) {
       const { data } = await firstValueFrom(
         this.http.post<{ id: string }>(
           `${GRAPH_URL}/${IG_BUSINESS_ACCOUNT_ID}/media`,
           null,
           {
-            params: {
-              image_url: imageUrl,
-              is_carousel_item: true,
-              access_token: META_ACCESS_TOKEN,
-            },
+            params: media.isVideo
+              ? {
+                  video_url: media.url,
+                  media_type: 'VIDEO',
+                  is_carousel_item: true,
+                  access_token: META_ACCESS_TOKEN,
+                }
+              : {
+                  image_url: media.url,
+                  is_carousel_item: true,
+                  access_token: META_ACCESS_TOKEN,
+                },
           },
         ),
       );
-      await this.waitUntilReady(data.id);
+      await this.waitUntilReady(
+        data.id,
+        media.isVideo ? VIDEO_CONTAINER_POLL_ATTEMPTS : CONTAINER_POLL_ATTEMPTS,
+      );
       children.push(data.id);
     }
 
@@ -202,18 +240,22 @@ export class InstagramService {
     return data.id;
   }
 
-  private async waitUntilReady(containerId: string): Promise<void> {
-    for (let attempt = 0; attempt < CONTAINER_POLL_ATTEMPTS; attempt++) {
+  private async waitUntilReady(
+    containerId: string,
+    attempts: number = CONTAINER_POLL_ATTEMPTS,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       const { data } = await firstValueFrom(
-        this.http.get<{ status_code: string }>(`${GRAPH_URL}/${containerId}`, {
-          params: { fields: 'status_code', access_token: META_ACCESS_TOKEN },
+        this.http.get<{ status_code: string; status?: string }>(`${GRAPH_URL}/${containerId}`, {
+          // status_code — машиночитаемый статус (FINISHED/ERROR/...), status — человекочитаемая причина
+          params: { fields: 'status_code,status', access_token: META_ACCESS_TOKEN },
         }),
       );
 
       if (data.status_code === 'FINISHED') return;
       if (data.status_code === 'ERROR' || data.status_code === 'EXPIRED') {
         throw new Error(
-          `Instagram-контейнер ${containerId}: статус ${data.status_code}`,
+          `Instagram-контейнер ${containerId}: статус ${data.status_code}${data.status ? ` — ${data.status}` : ''}`,
         );
       }
 
@@ -222,7 +264,7 @@ export class InstagramService {
       );
     }
     throw new Error(
-      `Instagram-контейнер ${containerId} не готов после ${CONTAINER_POLL_ATTEMPTS} попыток`,
+      `Instagram-контейнер ${containerId} не готов после ${attempts} попыток`,
     );
   }
 
