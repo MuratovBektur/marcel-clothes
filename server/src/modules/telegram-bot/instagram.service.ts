@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
 import { isVideoUrl } from '../../libs/media';
 import { getPublicUrl } from '../../libs/public-url';
+import { logPublishError } from '../../libs/publish-error-log';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const IG_BUSINESS_ACCOUNT_ID = process.env.IG_BUSINESS_ACCOUNT_ID;
@@ -103,6 +104,7 @@ export class InstagramService {
           (graphError ? `: ${JSON.stringify(graphError)}` : ''),
         err instanceof Error ? err.stack : String(err),
       );
+      logPublishError('Instagram', product.id, err);
       throw err;
     }
   }

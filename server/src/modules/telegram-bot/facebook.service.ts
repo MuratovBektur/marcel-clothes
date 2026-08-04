@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
 import { isVideoUrl } from '../../libs/media';
 import { getPublicUrl } from '../../libs/public-url';
+import { logPublishError } from '../../libs/publish-error-log';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
@@ -88,6 +89,7 @@ export class FacebookService {
           (graphError ? `: ${JSON.stringify(graphError)}` : ''),
         err instanceof Error ? err.stack : String(err),
       );
+      logPublishError('Facebook', product.id, err);
       throw err;
     }
   }

@@ -45,6 +45,7 @@ services:
       - ./server:/app
       - /app/node_modules
       - ./uploads:/app/uploads
+      - ./logs:/app/logs
       - tg_bot_api_data_local:/var/lib/telegram-bot-api:ro
       - ./tunnel:/tunnel:ro
   nginx:

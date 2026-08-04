@@ -10,7 +10,7 @@ import {
   Action,
   On,
 } from 'nestjs-telegraf';
-import { OnModuleInit } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import { Context, Markup, Telegraf } from 'telegraf';
 import { ProductsService } from '../products/products.service';
 import { Product } from '../../entities/product.entity';
@@ -26,9 +26,12 @@ import { ChatService } from '../chat/chat.service';
 import { ChatNotifyService } from '../chat/chat-notify.service';
 import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from './constants';
 import { isVideoUrl } from '../../libs/media';
+import { logPublishError, shortErrorMessage } from '../../libs/publish-error-log';
 
 @Update()
 export class TelegramBotUpdate implements OnModuleInit {
+  private readonly logger = new Logger(TelegramBotUpdate.name);
+
   constructor(
     @InjectBot() private readonly bot: Telegraf<Context>,
     private readonly productsService: ProductsService,
@@ -1059,8 +1062,12 @@ export class TelegramBotUpdate implements OnModuleInit {
         });
         results.push('✅ Telegram');
       } catch (e) {
-        console.error('[Bot] TG publish error:', e);
-        results.push('❌ Telegram (ошибка)');
+        this.logger.error(
+          `Не удалось опубликовать товар ${productId} в Telegram-канал`,
+          e instanceof Error ? e.stack : String(e),
+        );
+        logPublishError('Telegram', productId, e);
+        results.push(`❌ Telegram (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
       }
     } else {
       results.push('⚠️ Telegram (группа не настроена)');
@@ -1075,8 +1082,12 @@ export class TelegramBotUpdate implements OnModuleInit {
         await this.productsService.update(productId, { publishedWaPost: waPost });
         results.push(`✅ WhatsApp (*${waGroup.waGroupName ?? waGroup.waGroupId}*)`);
       } catch (e) {
-        console.error('[Bot] WA publish error:', e);
-        results.push('❌ WhatsApp (ошибка)');
+        this.logger.error(
+          `Не удалось опубликовать товар ${productId} в WhatsApp`,
+          e instanceof Error ? e.stack : String(e),
+        );
+        logPublishError('WhatsApp', productId, e);
+        results.push(`❌ WhatsApp (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
       }
     } else if (!waAuth) {
       results.push('⚠️ WhatsApp (не подключён)');
@@ -1097,8 +1108,12 @@ export class TelegramBotUpdate implements OnModuleInit {
         results.push('⚠️ Instagram (не настроен)');
       }
     } catch (e) {
-      console.error('[Bot] Instagram publish error:', e);
-      results.push('❌ Instagram (ошибка)');
+      // Детали (Graph API error + файл-лог) уже записаны внутри instagramService.publish()
+      this.logger.error(
+        `Публикация товара ${productId} в Instagram провалилась`,
+        e instanceof Error ? e.stack : String(e),
+      );
+      results.push(`❌ Instagram (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
     }
 
     // ── Facebook ──────────────────────────────────────────────────────────────
@@ -1114,8 +1129,12 @@ export class TelegramBotUpdate implements OnModuleInit {
         results.push('⚠️ Facebook (не настроен)');
       }
     } catch (e) {
-      console.error('[Bot] Facebook publish error:', e);
-      results.push('❌ Facebook (ошибка)');
+      // Детали (Graph API error + файл-лог) уже записаны внутри facebookService.publish()
+      this.logger.error(
+        `Публикация товара ${productId} на Facebook провалилась`,
+        e instanceof Error ? e.stack : String(e),
+      );
+      results.push(`❌ Facebook (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
     }
 
     await telegram.sendMessage(
@@ -1134,6 +1153,13 @@ export class TelegramBotUpdate implements OnModuleInit {
   private truncDesc(desc: string | null, max = 300): string {
     if (!desc) return '';
     return desc.length <= max ? desc : desc.slice(0, max) + '…';
+  }
+
+  // Итоговое сообщение о публикации шлём с parse_mode: 'Markdown' — без
+  // экранирования текст ошибки от Graph API (в нём часто есть `_`, `*`, `[`)
+  // ломает разметку, и Telegram вообще не присылает результат публикации.
+  private escapeMd(text: string): string {
+    return text.replace(/([_*`[])/g, '\\$1');
   }
 
   private settingsMainKeyboard() {

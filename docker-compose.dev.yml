@@ -36,6 +36,7 @@ services:
     command: npm run start:prod
     volumes:
       - ./uploads:/app/uploads
+      - ./logs:/app/logs
       - tg_bot_api_data_dev:/var/lib/telegram-bot-api:ro
 
   # Свой Telegram Bot API сервер — снимает лимит облачного api.telegram.org
