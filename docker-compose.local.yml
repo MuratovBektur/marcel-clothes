@@ -46,6 +46,7 @@ services:
       - /app/node_modules
       - ./uploads:/app/uploads
       - tg_bot_api_data_local:/var/lib/telegram-bot-api:ro
+      - ./tunnel:/tunnel:ro
   nginx:
     image: nginx
     restart: "no"
@@ -80,6 +81,27 @@ services:
       - 8081
     volumes:
       - tg_bot_api_data_local:/var/lib/telegram-bot-api
+
+  # Автоматический Cloudflare Quick Tunnel на nginx — даёт публичный URL,
+  # без которого Instagram/Facebook/глобальный маркет не могут скачать
+  # фото/видео товара (им нужен реальный интернет-адрес, localhost не подойдёт).
+  # Бесплатный анонимный режим (без аккаунта Cloudflare) — при каждом
+  # перезапуске адрес НОВЫЙ, это ограничение самого Cloudflare, не наше. Но
+  # адрес подхватывается автоматически: quick-tunnel.sh пишет его в общий том
+  # ./tunnel, а server читает оттуда при каждой публикации
+  # (server/src/libs/public-url.ts) — руками .env.local больше не правим.
+  # Официальный образ cloudflared без шелла — поэтому свой Dockerfile
+  # (просто копирует бинарник в alpine, где есть sh/grep для скрипта).
+  cloudflared:
+    build: ./cloudflared
+    container_name: "marcel-clothes_cloudflared_local"
+    restart: always
+    depends_on:
+      - nginx
+    environment:
+      - TUNNEL_TARGET_URL=http://nginx:80
+    volumes:
+      - ./tunnel:/tunnel
 
 volumes:
   tg_bot_api_data_local:

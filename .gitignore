@@ -45,6 +45,10 @@ memory
 # User-uploaded files (persisted via Docker volume)
 uploads/
 
+# Runtime-generated Cloudflare Quick Tunnel URL (changes every restart, see
+# cloudflared/quick-tunnel.sh + server/src/libs/public-url.ts)
+/tunnel/
+
 # temp directory
 .temp
 temp

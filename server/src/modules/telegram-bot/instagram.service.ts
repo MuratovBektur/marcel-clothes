@@ -6,11 +6,11 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
 import { isVideoUrl } from '../../libs/media';
+import { getPublicUrl } from '../../libs/public-url';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const IG_BUSINESS_ACCOUNT_ID = process.env.IG_BUSINESS_ACCOUNT_ID;
 const META_API_VERSION = process.env.META_GRAPH_API_VERSION ?? 'v21.0';
-const PUBLIC_URL = process.env.PUBLIC_URL ?? 'https://marcel.kg';
 const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
 // Instagram-карусель поддерживает максимум 10 медиафайлов на пост
@@ -151,14 +151,14 @@ export class InstagramService {
         .toFile(destPath);
     }
 
-    return `${PUBLIC_URL}/uploads/products/instagram/${jpegName}`;
+    return `${getPublicUrl()}/uploads/products/instagram/${jpegName}`;
   }
 
   // Видео отдаём Graph API как есть (уже публично доступный .mp4 под /uploads) —
   // конвертация в JPEG нужна только фото (Graph принимает по URL лишь JPEG/PNG).
   private async toPublicMediaUrl(localPath: string): Promise<MediaRef> {
     if (isVideoUrl(localPath)) {
-      return { url: `${PUBLIC_URL}${localPath}`, isVideo: true };
+      return { url: `${getPublicUrl()}${localPath}`, isVideo: true };
     }
     return { url: await this.toPublicJpegUrl(localPath), isVideo: false };
   }

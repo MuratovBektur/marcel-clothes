@@ -6,11 +6,11 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { Product } from '../../entities/product.entity';
 import { isVideoUrl } from '../../libs/media';
+import { getPublicUrl } from '../../libs/public-url';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
 const META_API_VERSION = process.env.META_GRAPH_API_VERSION ?? 'v21.0';
-const PUBLIC_URL = process.env.PUBLIC_URL ?? 'https://marcel.kg';
 const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
 const MAX_PHOTOS_PER_POST = 10;
@@ -128,14 +128,14 @@ export class FacebookService {
         .toFile(destPath);
     }
 
-    return `${PUBLIC_URL}/uploads/products/facebook/${jpegName}`;
+    return `${getPublicUrl()}/uploads/products/facebook/${jpegName}`;
   }
 
   // Видео отдаём Graph API как есть (уже публично доступный .mp4 под /uploads) —
   // конвертация в JPEG нужна только фото (Graph принимает по URL лишь JPEG/PNG).
   private async toPublicMediaUrl(localPath: string): Promise<MediaRef> {
     if (isVideoUrl(localPath)) {
-      return { url: `${PUBLIC_URL}${localPath}`, isVideo: true };
+      return { url: `${getPublicUrl()}${localPath}`, isVideo: true };
     }
     return { url: await this.toPublicJpegUrl(localPath), isVideo: false };
   }

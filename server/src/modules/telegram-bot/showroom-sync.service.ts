@@ -2,10 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { Product } from '../../entities/product.entity';
+import { getPublicUrl } from '../../libs/public-url';
 
 const SHOWROOM_API_URL = process.env.SHOWROOM_API_URL;
 const SHOWROOM_API_KEY = process.env.SHOWROOM_API_KEY;
-const PUBLIC_URL = process.env.PUBLIC_URL ?? 'https://marcel.kg';
 
 // Глобальный маркет требует категорию из своего справочника — у нас её нет,
 // весь ассортимент относим к этой категории.
@@ -26,8 +26,9 @@ export class ShowroomSyncService {
       return null;
     }
 
+    const publicUrl = getPublicUrl();
     const toAbsolute = (url: string) =>
-      url.startsWith('http') ? url : `${PUBLIC_URL}${url}`;
+      url.startsWith('http') ? url : `${publicUrl}${url}`;
 
     const description =
       [product.description, product.additionalDescription]
