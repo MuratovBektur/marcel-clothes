@@ -68,6 +68,12 @@ export class FacebookService {
       );
       const caption = this.buildCaption(product);
 
+      // ВНИМАНИЕ: attached_media (этот путь для 2+ медиа) сейчас падает с
+      // "(#10) Application does not have permission for this action" —
+      // pages_manage_posts у приложения в статусе Standard Access, без
+      // App Review. Публикация товаров с одним фото/видео работает.
+      // Временное решение (публикация отдельными постами на каждый файл)
+      // обсуждали и отклонили — оставлено как есть до решения по правам.
       const postId =
         mediaItems.length === 1
           ? await this.publishSingleMedia(mediaItems[0], caption, pageToken)
@@ -76,8 +82,10 @@ export class FacebookService {
       this.logger.log(`Опубликовано на Facebook: ${postId}`);
       return { postId, permalink: `https://www.facebook.com/${postId}` };
     } catch (err) {
+      const graphError = (err as any)?.response?.data?.error;
       this.logger.error(
-        `Не удалось опубликовать товар ${product.id} на Facebook`,
+        `Не удалось опубликовать товар ${product.id} на Facebook` +
+          (graphError ? `: ${JSON.stringify(graphError)}` : ''),
         err instanceof Error ? err.stack : String(err),
       );
       throw err;

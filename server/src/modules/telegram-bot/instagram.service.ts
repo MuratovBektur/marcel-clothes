@@ -97,8 +97,10 @@ export class InstagramService {
       this.logger.log(`Опубликовано в Instagram: ${mediaId}`);
       return { mediaId, permalink };
     } catch (err) {
+      const graphError = (err as any)?.response?.data?.error;
       this.logger.error(
-        `Не удалось опубликовать товар ${product.id} в Instagram`,
+        `Не удалось опубликовать товар ${product.id} в Instagram` +
+          (graphError ? `: ${JSON.stringify(graphError)}` : ''),
         err instanceof Error ? err.stack : String(err),
       );
       throw err;

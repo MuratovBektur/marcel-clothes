@@ -13,6 +13,7 @@ import {
 import { OnModuleInit } from '@nestjs/common';
 import { Context, Markup, Telegraf } from 'telegraf';
 import { ProductsService } from '../products/products.service';
+import { Product } from '../../entities/product.entity';
 import { OrdersService } from '../orders/orders.service';
 import { AuthService } from './auth.service';
 import { GroupService } from './group.service';
@@ -1008,6 +1009,13 @@ export class TelegramBotUpdate implements OnModuleInit {
   }
 
   // ─── Публикация (Telegram + WhatsApp одновременно) ───────────────────────────
+  // Публикация во все площадки может занять больше 90 секунд (особенно
+  // Instagram-видео — там опрос готовности контейнера сам по себе может идти
+  // до 90 секунд), а у Telegraf есть встроенный handlerTimeout ровно в 90000мс
+  // на весь update-хендлер (см. node_modules/telegraf/lib/telegraf.js). Поэтому
+  // отвечаем мгновенно и публикуем в фоне (fire-and-forget), результат шлём
+  // отдельным сообщением по готовности — иначе Telegraf рвёт хендлер
+  // TimeoutError'ом, а реальный результат публикации никуда не долетает.
   @Action(/^publish:(.+)/)
   async onPublish(@Ctx() ctx: any) {
     const productId = (ctx.callbackQuery.data as string).replace('publish:', '');
@@ -1018,13 +1026,33 @@ export class TelegramBotUpdate implements OnModuleInit {
     await ctx.answerCbQuery('📢 Публикую...');
     try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch { /* ignore */ }
 
+    const chatId = ctx.chat.id;
+    const userId = ctx.from.id;
+    const telegram = ctx.telegram;
+
+    await ctx.reply(
+      '📢 Публикация запущена — это может занять до пары минут (видео обрабатывается дольше). Пришлю результат отдельным сообщением.',
+    );
+
+    this.publishToAllPlatforms(p, telegram, chatId, userId).catch((err) => {
+      console.error('[Bot] Publish pipeline error:', err);
+    });
+  }
+
+  private async publishToAllPlatforms(
+    p: Product,
+    telegram: any,
+    chatId: number,
+    userId: number,
+  ) {
+    const productId = p.id;
     const results: string[] = [];
 
     // ── Telegram ──────────────────────────────────────────────────────────────
-    const groupChatId = await this.groupService.get(ctx.from.id);
+    const groupChatId = await this.groupService.get(userId);
     if (groupChatId) {
       try {
-        const messageIds = await this.tgGroupService.sendProductCard(ctx.telegram, groupChatId, p);
+        const messageIds = await this.tgGroupService.sendProductCard(telegram, groupChatId, p);
         await this.productsService.update(productId, {
           isPublished: true,
           publishedPost: { chatId: groupChatId, messageIds },
@@ -1039,11 +1067,11 @@ export class TelegramBotUpdate implements OnModuleInit {
     }
 
     // ── WhatsApp ──────────────────────────────────────────────────────────────
-    const waAuth = this.waService.isAuthenticated(ctx.from.id);
-    const waGroup = await this.waService.getSavedGroup(ctx.from.id);
+    const waAuth = this.waService.isAuthenticated(userId);
+    const waGroup = await this.waService.getSavedGroup(userId);
     if (waAuth && waGroup) {
       try {
-        const waPost = await this.waService.sendProductCard(ctx.from.id, p);
+        const waPost = await this.waService.sendProductCard(userId, p);
         await this.productsService.update(productId, { publishedWaPost: waPost });
         results.push(`✅ WhatsApp (*${waGroup.waGroupName ?? waGroup.waGroupId}*)`);
       } catch (e) {
@@ -1090,7 +1118,8 @@ export class TelegramBotUpdate implements OnModuleInit {
       results.push('❌ Facebook (ошибка)');
     }
 
-    await ctx.reply(
+    await telegram.sendMessage(
+      chatId,
       `*Результат публикации:*\n\n${results.join('\n')}`,
       { parse_mode: 'Markdown' },
     );
