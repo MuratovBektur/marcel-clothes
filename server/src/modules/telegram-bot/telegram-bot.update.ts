@@ -28,6 +28,21 @@ import { BOT_COMMANDS, CLOTHING_WIZARD_ID, EDIT_SCENE_ID, MAIN_KEYBOARD } from '
 import { isVideoUrl } from '../../libs/media';
 import { logPublishError, shortErrorMessage } from '../../libs/publish-error-log';
 
+interface PublishLineState {
+  label: string;
+  icon: '⏳' | '✅' | '❌' | '⚠️';
+  detail?: string;
+}
+type PublishPlatformKey = 'tg' | 'wa' | 'ig' | 'fb';
+type PublishProgressState = Record<PublishPlatformKey, PublishLineState>;
+const ALL_PUBLISH_PLATFORMS: PublishPlatformKey[] = ['tg', 'wa', 'ig', 'fb'];
+const PUBLISH_PLATFORM_LABELS: Record<PublishPlatformKey, string> = {
+  tg: 'Telegram',
+  wa: 'WhatsApp',
+  ig: 'Instagram',
+  fb: 'Facebook',
+};
+
 @Update()
 export class TelegramBotUpdate implements OnModuleInit {
   private readonly logger = new Logger(TelegramBotUpdate.name);
@@ -1011,14 +1026,17 @@ export class TelegramBotUpdate implements OnModuleInit {
     });
   }
 
-  // ─── Публикация (Telegram + WhatsApp одновременно) ───────────────────────────
+  // ─── Публикация (Telegram + WhatsApp + Instagram + Facebook параллельно) ─────
   // Публикация во все площадки может занять больше 90 секунд (особенно
   // Instagram-видео — там опрос готовности контейнера сам по себе может идти
   // до 90 секунд), а у Telegraf есть встроенный handlerTimeout ровно в 90000мс
   // на весь update-хендлер (см. node_modules/telegraf/lib/telegraf.js). Поэтому
-  // отвечаем мгновенно и публикуем в фоне (fire-and-forget), результат шлём
-  // отдельным сообщением по готовности — иначе Telegraf рвёт хендлер
-  // TimeoutError'ом, а реальный результат публикации никуда не долетает.
+  // отвечаем мгновенно и публикуем в фоне (fire-and-forget). Раньше площадки
+  // публиковались одна за другой (общее время — сумма всех), теперь —
+  // параллельно (Promise.all), общее время ограничено самой медленной
+  // площадкой. Прогресс живёт в одном сообщении, которое мы правим по мере
+  // готовности каждой площадки (⏳ → ✅/❌/⚠️), оно же становится финальным
+  // результатом — отдельного сообщения-результата больше нет.
   @Action(/^publish:(.+)/)
   async onPublish(@Ctx() ctx: any) {
     const productId = (ctx.callbackQuery.data as string).replace('publish:', '');
@@ -1026,6 +1044,124 @@ export class TelegramBotUpdate implements OnModuleInit {
     const p = await this.productsService.findOne(productId);
     if (!p) { await ctx.answerCbQuery('❌ Товар не найден', { show_alert: true }); return; }
 
+    const statuses = this.platformStatuses(p);
+    const everAttempted = statuses.some((s) => s.published || s.detail);
+    if (everAttempted) {
+      await ctx.answerCbQuery();
+      const lines = statuses.map(
+        (s) =>
+          `${s.published ? '✅' : '✕'} ${s.label}${s.detail ? ` — ${this.escapeMd(s.detail)}` : ''}`,
+      );
+      const missing = statuses.filter((s) => !s.published);
+
+      const rows = [[Markup.button.callback('🔁 Все площадки повторно', `publish_confirm:${productId}`)]];
+      if (missing.length > 0) {
+        rows.push([Markup.button.callback('📤 Только неопубликованные', `publish_missing:${productId}`)]);
+      }
+      rows.push([Markup.button.callback('❌ Отмена', `publish_cancel:${productId}`)]);
+
+      await ctx.reply(`⚠️ *Товар уже публиковался:*\n\n${lines.join('\n')}\n\nЧто сделать?`, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(rows),
+      });
+      return;
+    }
+
+    await this.startPublish(ctx, p);
+  }
+
+  @Action(/^publish_confirm:(.+)/)
+  async onPublishConfirm(@Ctx() ctx: any) {
+    const productId = (ctx.callbackQuery.data as string).replace('publish_confirm:', '');
+    const p = await this.productsService.findOne(productId);
+    if (!p) { await ctx.answerCbQuery('❌ Товар не найден', { show_alert: true }); return; }
+    await this.startPublish(ctx, p);
+  }
+
+  @Action(/^publish_missing:(.+)/)
+  async onPublishMissing(@Ctx() ctx: any) {
+    const productId = (ctx.callbackQuery.data as string).replace('publish_missing:', '');
+    const p = await this.productsService.findOne(productId);
+    if (!p) { await ctx.answerCbQuery('❌ Товар не найден', { show_alert: true }); return; }
+    const targets = new Set(
+      this.platformStatuses(p).filter((s) => !s.published).map((s) => s.key),
+    );
+    await this.startPublish(ctx, p, targets);
+  }
+
+  @Action(/^publish_cancel:(.+)/)
+  async onPublishCancel(@Ctx() ctx: any) {
+    await ctx.answerCbQuery('Отменено');
+    try {
+      await ctx.editMessageText('❌ Публикация отменена.', { ...Markup.inlineKeyboard([]) });
+    } catch { /* ignore */ }
+  }
+
+  // Публикация может когда-то пройти успешно (ID поста сохранён), а на более
+  // поздней попытке (например, после редактирования товара) — упасть. Одно
+  // только наличие ID не отличает эти случаи, поэтому "опубликовано" — это
+  // (успех И последняя попытка не падала); иначе площадка считается
+  // неопубликованной (✕), даже если когда-то раньше публикация проходила.
+  private platformStatuses(p: Product): {
+    key: PublishPlatformKey;
+    label: string;
+    published: boolean;
+    detail?: string;
+  }[] {
+    return [
+      {
+        key: 'tg',
+        label: 'Telegram',
+        published: p.isPublished && !p.telegramLastError,
+        detail: p.telegramLastError ?? undefined,
+      },
+      {
+        key: 'wa',
+        label: 'WhatsApp',
+        published: !!p.publishedWaPost && !p.whatsappLastError,
+        detail: p.whatsappLastError ?? undefined,
+      },
+      {
+        key: 'ig',
+        label: 'Instagram',
+        published: !!p.instagramMediaId && !p.instagramLastError,
+        detail: p.instagramLastError ?? undefined,
+      },
+      {
+        key: 'fb',
+        label: 'Facebook',
+        published: !!p.facebookPostId && !p.facebookLastError,
+        detail: p.facebookLastError ?? undefined,
+      },
+    ];
+  }
+
+  private initialPublishState(targets: Set<PublishPlatformKey>): PublishProgressState {
+    const state = {} as PublishProgressState;
+    for (const key of ALL_PUBLISH_PLATFORMS) {
+      state[key] = targets.has(key)
+        ? { label: PUBLISH_PLATFORM_LABELS[key], icon: '⏳' }
+        : { label: PUBLISH_PLATFORM_LABELS[key], icon: '✅', detail: 'уже опубликовано, пропущено' };
+    }
+    return state;
+  }
+
+  private renderPublishProgress(state: PublishProgressState, dots = 1): string {
+    const lines = Object.values(state).map(
+      (s) => `${s.icon} ${s.label}${s.detail ? ` — ${s.detail}` : ''}`,
+    );
+    const pending = Object.values(state).some((s) => s.icon === '⏳');
+    const header = pending
+      ? `📢 *Публикация${'.'.repeat(dots)}*\n_Может занять до пары минут — видео обрабатывается дольше._`
+      : '*Результат публикации:*';
+    return `${header}\n\n${lines.join('\n')}`;
+  }
+
+  private async startPublish(
+    ctx: any,
+    p: Product,
+    targets: Set<PublishPlatformKey> = new Set(ALL_PUBLISH_PLATFORMS),
+  ) {
     await ctx.answerCbQuery('📢 Публикую...');
     try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch { /* ignore */ }
 
@@ -1033,115 +1169,188 @@ export class TelegramBotUpdate implements OnModuleInit {
     const userId = ctx.from.id;
     const telegram = ctx.telegram;
 
-    await ctx.reply(
-      '📢 Публикация запущена — это может занять до пары минут (видео обрабатывается дольше). Пришлю результат отдельным сообщением.',
+    const progressMsg = await ctx.reply(
+      this.renderPublishProgress(this.initialPublishState(targets)),
+      { parse_mode: 'Markdown' },
     );
 
-    this.publishToAllPlatforms(p, telegram, chatId, userId).catch((err) => {
-      console.error('[Bot] Publish pipeline error:', err);
-    });
+    this.runPublishPipeline(p, telegram, chatId, userId, progressMsg.message_id, targets).catch(
+      (err) => {
+        this.logger.error(
+          `Publish pipeline error (товар ${p.id})`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      },
+    );
   }
 
-  private async publishToAllPlatforms(
+  private async runPublishPipeline(
     p: Product,
     telegram: any,
     chatId: number,
     userId: number,
+    progressMessageId: number,
+    targets: Set<PublishPlatformKey>,
   ) {
     const productId = p.id;
-    const results: string[] = [];
+    const state = this.initialPublishState(targets);
+    let dots = 1;
 
-    // ── Telegram ──────────────────────────────────────────────────────────────
-    const groupChatId = await this.groupService.get(userId);
-    if (groupChatId) {
+    // Параллельные задачи правят один и тот же объект state и просят перерисовать
+    // сообщение — сериализуем сами edit-запросы в цепочку, чтобы не гонять
+    // параллельные editMessageText на одно и то же сообщение.
+    let editQueue: Promise<unknown> = Promise.resolve();
+    const pushUpdate = () => {
+      editQueue = editQueue
+        .then(
+          () =>
+            telegram.editMessageText(
+              chatId,
+              progressMessageId,
+              undefined,
+              this.renderPublishProgress(state, dots),
+              { parse_mode: 'Markdown' },
+            ) as Promise<unknown>,
+        )
+        .catch(() => {
+          // "message is not modified" и подобные гонки не критичны — итоговое
+          // состояние всё равно попадёт в последнюю правку.
+        });
+      return editQueue;
+    };
+
+    // Простой "спиннер" — точки после "Публикация", чтобы было видно, что
+    // процесс живой, а не завис (пока ждём Instagram/видео, это может
+    // растянуться на десятки секунд без единого реального обновления status).
+    const dotsTimer = setInterval(() => {
+      dots = (dots % 3) + 1;
+      void pushUpdate();
+    }, 500);
+
+    const tgTask = (async () => {
+      if (!targets.has('tg')) return;
+      const groupChatId = await this.groupService.get(userId);
+      if (!groupChatId) {
+        state.tg = { label: 'Telegram', icon: '⚠️', detail: 'группа не настроена' };
+        return pushUpdate();
+      }
       try {
         const messageIds = await this.tgGroupService.sendProductCard(telegram, groupChatId, p);
         await this.productsService.update(productId, {
           isPublished: true,
           publishedPost: { chatId: groupChatId, messageIds },
+          telegramLastError: null,
         });
-        results.push('✅ Telegram');
+        state.tg = { label: 'Telegram', icon: '✅' };
       } catch (e) {
         this.logger.error(
           `Не удалось опубликовать товар ${productId} в Telegram-канал`,
           e instanceof Error ? e.stack : String(e),
         );
         logPublishError('Telegram', productId, e);
-        results.push(`❌ Telegram (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
+        const detail = shortErrorMessage(e);
+        await this.productsService.update(productId, { telegramLastError: detail });
+        state.tg = { label: 'Telegram', icon: '❌', detail: this.escapeMd(detail) };
       }
-    } else {
-      results.push('⚠️ Telegram (группа не настроена)');
-    }
+      return pushUpdate();
+    })();
 
-    // ── WhatsApp ──────────────────────────────────────────────────────────────
-    const waAuth = this.waService.isAuthenticated(userId);
-    const waGroup = await this.waService.getSavedGroup(userId);
-    if (waAuth && waGroup) {
+    const waTask = (async () => {
+      if (!targets.has('wa')) return;
+      const waAuth = this.waService.isAuthenticated(userId);
+      const waGroup = await this.waService.getSavedGroup(userId);
+      if (!waAuth) {
+        state.wa = { label: 'WhatsApp', icon: '⚠️', detail: 'не подключён' };
+        return pushUpdate();
+      }
+      if (!waGroup) {
+        state.wa = { label: 'WhatsApp', icon: '⚠️', detail: 'группа не выбрана' };
+        return pushUpdate();
+      }
       try {
         const waPost = await this.waService.sendProductCard(userId, p);
-        await this.productsService.update(productId, { publishedWaPost: waPost });
-        results.push(`✅ WhatsApp (*${waGroup.waGroupName ?? waGroup.waGroupId}*)`);
+        await this.productsService.update(productId, {
+          publishedWaPost: waPost,
+          whatsappLastError: null,
+        });
+        state.wa = {
+          label: 'WhatsApp',
+          icon: '✅',
+          detail: this.escapeMd(waGroup.waGroupName ?? waGroup.waGroupId),
+        };
       } catch (e) {
         this.logger.error(
           `Не удалось опубликовать товар ${productId} в WhatsApp`,
           e instanceof Error ? e.stack : String(e),
         );
         logPublishError('WhatsApp', productId, e);
-        results.push(`❌ WhatsApp (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
+        const detail = shortErrorMessage(e);
+        await this.productsService.update(productId, { whatsappLastError: detail });
+        state.wa = { label: 'WhatsApp', icon: '❌', detail: this.escapeMd(detail) };
       }
-    } else if (!waAuth) {
-      results.push('⚠️ WhatsApp (не подключён)');
-    } else {
-      results.push('⚠️ WhatsApp (группа не выбрана)');
-    }
+      return pushUpdate();
+    })();
 
-    // ── Instagram ─────────────────────────────────────────────────────────────
+    const igTask = (async () => {
+      if (!targets.has('ig')) return;
+      try {
+        const igResult = await this.instagramService.publish(p);
+        if (igResult) {
+          await this.productsService.update(productId, {
+            instagramMediaId: igResult.mediaId,
+            instagramPermalink: igResult.permalink,
+            instagramLastError: null,
+          });
+          state.ig = { label: 'Instagram', icon: '✅' };
+        } else {
+          state.ig = { label: 'Instagram', icon: '⚠️', detail: 'не настроен' };
+        }
+      } catch (e) {
+        // Детали (Graph API error + файл-лог) уже записаны внутри instagramService.publish()
+        this.logger.error(
+          `Публикация товара ${productId} в Instagram провалилась`,
+          e instanceof Error ? e.stack : String(e),
+        );
+        const detail = shortErrorMessage(e);
+        await this.productsService.update(productId, { instagramLastError: detail });
+        state.ig = { label: 'Instagram', icon: '❌', detail: this.escapeMd(detail) };
+      }
+      return pushUpdate();
+    })();
+
+    const fbTask = (async () => {
+      if (!targets.has('fb')) return;
+      try {
+        const fbResult = await this.facebookService.publish(p);
+        if (fbResult) {
+          await this.productsService.update(productId, {
+            facebookPostId: fbResult.postId,
+            facebookPermalink: fbResult.permalink,
+            facebookLastError: null,
+          });
+          state.fb = { label: 'Facebook', icon: '✅' };
+        } else {
+          state.fb = { label: 'Facebook', icon: '⚠️', detail: 'не настроен' };
+        }
+      } catch (e) {
+        // Детали (Graph API error + файл-лог) уже записаны внутри facebookService.publish()
+        this.logger.error(
+          `Публикация товара ${productId} на Facebook провалилась`,
+          e instanceof Error ? e.stack : String(e),
+        );
+        const detail = shortErrorMessage(e);
+        await this.productsService.update(productId, { facebookLastError: detail });
+        state.fb = { label: 'Facebook', icon: '❌', detail: this.escapeMd(detail) };
+      }
+      return pushUpdate();
+    })();
+
     try {
-      const igResult = await this.instagramService.publish(p);
-      if (igResult) {
-        await this.productsService.update(productId, {
-          instagramMediaId: igResult.mediaId,
-          instagramPermalink: igResult.permalink,
-        });
-        results.push('✅ Instagram');
-      } else {
-        results.push('⚠️ Instagram (не настроен)');
-      }
-    } catch (e) {
-      // Детали (Graph API error + файл-лог) уже записаны внутри instagramService.publish()
-      this.logger.error(
-        `Публикация товара ${productId} в Instagram провалилась`,
-        e instanceof Error ? e.stack : String(e),
-      );
-      results.push(`❌ Instagram (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
+      await Promise.all([tgTask, waTask, igTask, fbTask]);
+    } finally {
+      clearInterval(dotsTimer);
     }
-
-    // ── Facebook ──────────────────────────────────────────────────────────────
-    try {
-      const fbResult = await this.facebookService.publish(p);
-      if (fbResult) {
-        await this.productsService.update(productId, {
-          facebookPostId: fbResult.postId,
-          facebookPermalink: fbResult.permalink,
-        });
-        results.push('✅ Facebook');
-      } else {
-        results.push('⚠️ Facebook (не настроен)');
-      }
-    } catch (e) {
-      // Детали (Graph API error + файл-лог) уже записаны внутри facebookService.publish()
-      this.logger.error(
-        `Публикация товара ${productId} на Facebook провалилась`,
-        e instanceof Error ? e.stack : String(e),
-      );
-      results.push(`❌ Facebook (ошибка: ${this.escapeMd(shortErrorMessage(e))})`);
-    }
-
-    await telegram.sendMessage(
-      chatId,
-      `*Результат публикации:*\n\n${results.join('\n')}`,
-      { parse_mode: 'Markdown' },
-    );
+    await editQueue;
   }
 
   // ─── Пустая кнопка счётчика ───────────────────────────────────────────────────

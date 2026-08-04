@@ -18,8 +18,10 @@ const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 const MAX_CAROUSEL_ITEMS = 10;
 const CONTAINER_POLL_ATTEMPTS = 15;
 const CONTAINER_POLL_DELAY_MS = 2000;
-// Видео-контейнеры обрабатываются Instagram заметно дольше, чем фото
-const VIDEO_CONTAINER_POLL_ATTEMPTS = 45;
+// Видео-контейнеры обрабатываются Instagram заметно дольше, чем фото —
+// 90 попыток * 2с = до 3 минут на видео (было 45 попыток/90с, этого
+// иногда не хватало даже одному видео, не говоря про карусель из нескольких).
+const VIDEO_CONTAINER_POLL_ATTEMPTS = 90;
 
 interface MediaRef {
   url: string;
@@ -198,34 +200,43 @@ export class InstagramService {
     mediaItems: MediaRef[],
     caption: string,
   ): Promise<string> {
-    const children: string[] = [];
-    for (const media of mediaItems) {
-      const { data } = await firstValueFrom(
-        this.http.post<{ id: string }>(
-          `${GRAPH_URL}/${IG_BUSINESS_ACCOUNT_ID}/media`,
-          null,
-          {
-            params: media.isVideo
-              ? {
-                  video_url: media.url,
-                  media_type: 'VIDEO',
-                  is_carousel_item: true,
-                  access_token: META_ACCESS_TOKEN,
-                }
-              : {
-                  image_url: media.url,
-                  is_carousel_item: true,
-                  access_token: META_ACCESS_TOKEN,
-                },
-          },
-        ),
-      );
-      await this.waitUntilReady(
-        data.id,
-        media.isVideo ? VIDEO_CONTAINER_POLL_ATTEMPTS : CONTAINER_POLL_ATTEMPTS,
-      );
-      children.push(data.id);
-    }
+    // Раньше элементы карусели грузились и ждали готовности по очереди —
+    // при 2-3 видео это N раз по (до 90с ожидания), т.к. следующая загрузка
+    // даже не начиналась, пока Instagram не доделает предыдущее видео. Теперь
+    // грузим все элементы параллельно — Instagram обрабатывает их
+    // одновременно на своей стороне, и общее время = время самого медленного
+    // видео, а не сумма всех. Promise.all сохраняет порядок mediaItems.
+    const children = await Promise.all(
+      mediaItems.map(async (media) => {
+        const { data } = await firstValueFrom(
+          this.http.post<{ id: string }>(
+            `${GRAPH_URL}/${IG_BUSINESS_ACCOUNT_ID}/media`,
+            null,
+            {
+              params: media.isVideo
+                ? {
+                    video_url: media.url,
+                    media_type: 'VIDEO',
+                    is_carousel_item: true,
+                    access_token: META_ACCESS_TOKEN,
+                  }
+                : {
+                    image_url: media.url,
+                    is_carousel_item: true,
+                    access_token: META_ACCESS_TOKEN,
+                  },
+            },
+          ),
+        );
+        await this.waitUntilReady(
+          data.id,
+          media.isVideo
+            ? VIDEO_CONTAINER_POLL_ATTEMPTS
+            : CONTAINER_POLL_ATTEMPTS,
+        );
+        return data.id;
+      }),
+    );
 
     const { data } = await firstValueFrom(
       this.http.post<{ id: string }>(

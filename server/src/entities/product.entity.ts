@@ -68,6 +68,23 @@ export class Product {
   @Column({ type: 'text', name: 'facebook_permalink', nullable: true, default: null })
   facebookPermalink?: string | null;
 
+  // Текст ошибки последней попытки публикации в площадку — null, если последняя
+  // попытка прошла успешно (или площадки ещё не касались). Отдельно от
+  // isPublished/*PostId/*MediaId — те не сбрасываются на неудаче, поэтому сами
+  // по себе не отличают «опубликовано и актуально» от «было опубликовано,
+  // но последняя попытка обновить упала с ошибкой».
+  @Column({ type: 'text', name: 'telegram_last_error', nullable: true, default: null })
+  telegramLastError?: string | null;
+
+  @Column({ type: 'text', name: 'whatsapp_last_error', nullable: true, default: null })
+  whatsappLastError?: string | null;
+
+  @Column({ type: 'text', name: 'instagram_last_error', nullable: true, default: null })
+  instagramLastError?: string | null;
+
+  @Column({ type: 'text', name: 'facebook_last_error', nullable: true, default: null })
+  facebookLastError?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }
