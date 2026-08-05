@@ -47,8 +47,10 @@ export class Product {
   @Column({ default: false })
   isPublished!: boolean;
 
+  // Массив — товар может быть опубликован сразу в нескольких Telegram-каналах
+  // (см. TelegramChannel, общий список каналов для всех админов).
   @Column({ type: 'jsonb', nullable: true, default: null })
-  publishedPost!: { chatId: number; messageIds: number[] } | null;
+  publishedPost!: { chatId: number; messageIds: number[] }[] | null;
 
   @Column({ type: 'jsonb', nullable: true, default: null })
   publishedWaPost!: { groupId: string; keys: { remoteJid?: string; fromMe?: boolean; id?: string; participant?: string }[]; contentHash?: string } | null;

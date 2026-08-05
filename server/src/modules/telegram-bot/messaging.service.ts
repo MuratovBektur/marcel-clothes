@@ -65,18 +65,37 @@ export class TgGroupService {
     await Promise.allSettled(messageIds.map((id) => telegram.deleteMessage(chatId, id)));
   }
 
+  // Товар может быть опубликован сразу в нескольких каналах — пересобираем
+  // карточку в каждом; неудача в одном канале не должна мешать остальным.
   async updateProductCard(telegram: any, product: any): Promise<void> {
-    if (!product.publishedPost) return;
-    const { chatId, messageIds } = product.publishedPost;
-    await this.deleteProductCard(telegram, chatId, messageIds);
-    try {
-      const newIds = await this.sendProductCard(telegram, chatId, product);
-      await this.productsService.update(product.id, {
-        publishedPost: { chatId, messageIds: newIds },
-      });
-    } catch (e) {
-      console.error('[TgGroup] Failed to re-send to Telegram group:', e);
-      throw e;
+    const posts: { chatId: number; messageIds: number[] }[] =
+      product.publishedPost ?? [];
+    if (posts.length === 0) return;
+
+    const updated: { chatId: number; messageIds: number[] }[] = [];
+    let hadError = false;
+    for (const post of posts) {
+      await this.deleteProductCard(telegram, post.chatId, post.messageIds);
+      try {
+        const newIds = await this.sendProductCard(
+          telegram,
+          post.chatId,
+          product,
+        );
+        updated.push({ chatId: post.chatId, messageIds: newIds });
+      } catch (e) {
+        hadError = true;
+        console.error(
+          `[TgGroup] Failed to re-send to Telegram channel ${post.chatId}:`,
+          e,
+        );
+      }
+    }
+    await this.productsService.update(product.id, { publishedPost: updated });
+    if (hadError) {
+      throw new Error(
+        'Failed to re-send product card to some Telegram channels',
+      );
     }
   }
 }

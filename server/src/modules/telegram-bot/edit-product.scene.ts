@@ -219,11 +219,11 @@ export class EditProductScene {
       const product = await this.productsService.findOne(productId);
       const isPublished = product?.isPublished || product?.publishedWaPost;
 
-      if (product?.publishedPost) {
+      if (product?.publishedPost?.length) {
         try {
           await this.tgGroupService.updateProductCard(ctx.telegram, product);
         } catch {
-          await ctx.reply('⚠️ Не удалось обновить пост в Telegram группе.');
+          await ctx.reply('⚠️ Не удалось обновить пост в Telegram-каналах.');
         }
       }
 

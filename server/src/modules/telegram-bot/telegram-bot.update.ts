@@ -237,17 +237,19 @@ export class TelegramBotUpdate implements OnModuleInit {
   }
 
   // ─── Раздел Telegram ──────────────────────────────────────────────────────────
+  // Список каналов общий для всех, кто пользуется ботом: добавленный с любого
+  // устройства канал сразу доступен для публикации и виден в списке всем.
   @Action('stg:tg')
   async onStgTg(@Ctx() ctx: any) {
     await ctx.answerCbQuery();
     await ctx.editMessageText(
-      '📱 *Telegram группы*\n\nЗдесь настраиваются группы для автопубликации через бота.',
+      '📱 *Telegram-каналы*\n\nОбщий список для автопубликации — виден и доступен с любого устройства.',
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           [
-            Markup.button.callback('📋 Список групп', 'stg:tg_list'),
-            Markup.button.callback('➕ Добавить группу', 'stg:tg_add'),
+            Markup.button.callback('📋 Список каналов', 'stg:tg_list'),
+            Markup.button.callback('➕ Добавить канал', 'stg:tg_add'),
           ],
           [Markup.button.callback('◀️ Назад', 'stg:pub')],
         ]),
@@ -258,35 +260,45 @@ export class TelegramBotUpdate implements OnModuleInit {
   @Action('stg:tg_list')
   async onStgTgList(@Ctx() ctx: any) {
     await ctx.answerCbQuery();
-    const chatId = await this.groupService.get(ctx.from.id);
-    const title = await this.groupService.getTitle(ctx.from.id);
+    await this.renderTgChannelList(ctx);
+  }
 
-    const text = chatId
-      ? `📱 *Telegram группы*\n\n✅ Настроена группа:\n*${title ?? 'без названия'}* (\`${chatId}\`)`
-      : '📱 *Telegram группы*\n\n_Группа не настроена_';
+  @Action(/^stg:tg_remove:(.+)/)
+  async onStgTgRemove(@Ctx() ctx: any) {
+    const chatId = Number(
+      (ctx.callbackQuery.data as string).replace('stg:tg_remove:', ''),
+    );
+    await this.groupService.removeChannel(chatId);
+    await ctx.answerCbQuery('✅ Канал удалён');
+    await this.renderTgChannelList(ctx);
+  }
 
-    const buttons: ReturnType<typeof Markup.button.callback>[][] = [];
-    if (chatId) {
-      buttons.push([Markup.button.callback('🗑 Удалить группу', 'stg:tg_remove')]);
-    }
+  private async renderTgChannelList(ctx: any) {
+    const channels = await this.groupService.listChannels();
+
+    const text = channels.length
+      ? `📱 *Telegram-каналы*\n\n${channels
+          .map(
+            (c) =>
+              `✅ *${this.escapeMd(c.chatTitle ?? 'без названия')}* (\`${c.chatId}\`)`,
+          )
+          .join('\n')}`
+      : '📱 *Telegram-каналы*\n\n_Каналы не настроены_';
+
+    const buttons: ReturnType<typeof Markup.button.callback>[][] = channels.map(
+      (c) => [
+        Markup.button.callback(
+          `🗑 ${(c.chatTitle ?? String(c.chatId)).substring(0, 30)}`,
+          `stg:tg_remove:${c.chatId}`,
+        ),
+      ],
+    );
+    buttons.push([Markup.button.callback('➕ Добавить канал', 'stg:tg_add')]);
     buttons.push([Markup.button.callback('◀️ Назад', 'stg:tg')]);
 
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard(buttons),
-    });
-  }
-
-  @Action('stg:tg_remove')
-  async onStgTgRemove(@Ctx() ctx: any) {
-    await this.groupService.remove(ctx.from.id);
-    await ctx.answerCbQuery('✅ Группа удалена');
-    await ctx.editMessageText('📱 *Telegram группы*\n\n_Группа не настроена_', {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('➕ Добавить группу', 'stg:tg_add')],
-        [Markup.button.callback('◀️ Назад', 'stg:tg')],
-      ]),
     });
   }
 
@@ -686,10 +698,14 @@ export class TelegramBotUpdate implements OnModuleInit {
     try {
       const chat = await ctx.telegram.getChat(username);
       const chatId = (chat as any).id as number;
-      await this.groupService.set(ctx.from.id, chatId, (chat as any).title ?? undefined);
+      await this.groupService.addChannel(
+        chatId,
+        (chat as any).title ?? undefined,
+        ctx.from.id,
+      );
       ctx.session.awaitingGroupUsername = false;
       await ctx.reply(
-        `✅ Telegram группа *${(chat as any).title ?? username}* сохранена!`,
+        `✅ Telegram-канал *${(chat as any).title ?? username}* добавлен в общий список — доступен для публикации с любого устройства!`,
         { parse_mode: 'Markdown', reply_markup: MAIN_KEYBOARD },
       );
     } catch {
@@ -934,9 +950,15 @@ export class TelegramBotUpdate implements OnModuleInit {
       /^del_confirm:([^:]+):(\d+)$/.exec(ctx.callbackQuery.data as string) ?? [];
     const offset = parseInt(offsetStr, 10);
     const product = await this.productsService.findOne(productId);
-    if (product?.publishedPost) {
-      await this.tgGroupService.deleteProductCard(
-        ctx.telegram, product.publishedPost.chatId, product.publishedPost.messageIds,
+    if (product?.publishedPost?.length) {
+      await Promise.all(
+        product.publishedPost.map((post) =>
+          this.tgGroupService.deleteProductCard(
+            ctx.telegram,
+            post.chatId,
+            post.messageIds,
+          ),
+        ),
       );
     }
     if (product?.publishedWaPost) {
@@ -983,9 +1005,15 @@ export class TelegramBotUpdate implements OnModuleInit {
   async onDeleteConfirmNew(@Ctx() ctx: any) {
     const productId = (ctx.callbackQuery.data as string).replace('del_confirm_new:', '');
     const product = await this.productsService.findOne(productId);
-    if (product?.publishedPost) {
-      await this.tgGroupService.deleteProductCard(
-        ctx.telegram, product.publishedPost.chatId, product.publishedPost.messageIds,
+    if (product?.publishedPost?.length) {
+      await Promise.all(
+        product.publishedPost.map((post) =>
+          this.tgGroupService.deleteProductCard(
+            ctx.telegram,
+            post.chatId,
+            post.messageIds,
+          ),
+        ),
       );
     }
     if (product?.publishedWaPost) {
@@ -1229,28 +1257,80 @@ export class TelegramBotUpdate implements OnModuleInit {
 
     const tgTask = (async () => {
       if (!targets.has('tg')) return;
-      const groupChatId = await this.groupService.get(userId);
-      if (!groupChatId) {
-        state.tg = { label: 'Telegram', icon: '⚠️', detail: 'группа не настроена' };
+      // Канал больше не привязан к тому, кто публикует, — общий список для
+      // всех (см. GroupService.listChannels). Публикуем во все сразу; неудача
+      // в одном канале не должна блокировать остальные.
+      const channels = await this.groupService.listChannels();
+      if (channels.length === 0) {
+        state.tg = {
+          label: 'Telegram',
+          icon: '⚠️',
+          detail: 'канал не настроен',
+        };
         return pushUpdate();
       }
-      try {
-        const messageIds = await this.tgGroupService.sendProductCard(telegram, groupChatId, p);
+
+      const results = await Promise.allSettled(
+        channels.map(async (ch) => ({
+          chatId: ch.chatId,
+          messageIds: await this.tgGroupService.sendProductCard(
+            telegram,
+            ch.chatId,
+            p,
+          ),
+        })),
+      );
+      const succeeded = results
+        .filter(
+          (
+            r,
+          ): r is PromiseFulfilledResult<{
+            chatId: number;
+            messageIds: number[];
+          }> => r.status === 'fulfilled',
+        )
+        .map((r) => r.value);
+      const failed = results.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+
+      if (failed.length > 0) {
+        this.logger.error(
+          `Не удалось опубликовать товар ${productId} в ${failed.length} из ${channels.length} Telegram-каналов`,
+          failed[0].reason instanceof Error
+            ? failed[0].reason.stack
+            : String(failed[0].reason),
+        );
+        logPublishError('Telegram', productId, failed[0].reason);
+      }
+
+      if (succeeded.length > 0) {
         await this.productsService.update(productId, {
           isPublished: true,
-          publishedPost: { chatId: groupChatId, messageIds },
-          telegramLastError: null,
+          publishedPost: succeeded,
+          telegramLastError:
+            failed.length > 0 ? shortErrorMessage(failed[0].reason) : null,
         });
+      } else {
+        await this.productsService.update(productId, {
+          telegramLastError: shortErrorMessage(failed[0].reason),
+        });
+      }
+
+      if (failed.length === 0) {
         state.tg = { label: 'Telegram', icon: '✅' };
-      } catch (e) {
-        this.logger.error(
-          `Не удалось опубликовать товар ${productId} в Telegram-канал`,
-          e instanceof Error ? e.stack : String(e),
-        );
-        logPublishError('Telegram', productId, e);
-        const detail = shortErrorMessage(e);
-        await this.productsService.update(productId, { telegramLastError: detail });
-        state.tg = { label: 'Telegram', icon: '❌', detail: this.escapeMd(detail) };
+      } else if (succeeded.length === 0) {
+        state.tg = {
+          label: 'Telegram',
+          icon: '❌',
+          detail: this.escapeMd(shortErrorMessage(failed[0].reason)),
+        };
+      } else {
+        state.tg = {
+          label: 'Telegram',
+          icon: '⚠️',
+          detail: `${succeeded.length}/${channels.length} каналов`,
+        };
       }
       return pushUpdate();
     })();

@@ -22,6 +22,7 @@ import { BotUserGroup } from '../../entities/bot-user-group.entity';
 import { BotUserWaGroup } from '../../entities/bot-user-wa-group.entity';
 import { BotAuthorizedUser } from '../../entities/bot-authorized-user.entity';
 import { AllowedPhone } from '../../entities/allowed-phone.entity';
+import { TelegramChannel } from '../../entities/telegram-channel.entity';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 // Свой сервер telegram-bot-api вместо облачного api.telegram.org — снимает
@@ -41,7 +42,13 @@ if (!TELEGRAM_BOT_TOKEN) {
         ? { telegram: { apiRoot: TELEGRAM_BOT_API_ROOT } }
         : undefined,
     }),
-    TypeOrmModule.forFeature([BotUserGroup, BotUserWaGroup, BotAuthorizedUser, AllowedPhone]),
+    TypeOrmModule.forFeature([
+      BotUserGroup,
+      BotUserWaGroup,
+      BotAuthorizedUser,
+      AllowedPhone,
+      TelegramChannel,
+    ]),
     ProductsModule,
     OrdersModule,
     ChatModule,
